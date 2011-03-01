@@ -18,7 +18,7 @@ data Site = Site {parentseq::Name, position:: Integer, stype:: SiteType}
             deriving (Show)
 data CDS = CDS {cstart::Site, cend::Site, phase::Integer}
            deriving (Show)
-data Transcript = Transcript { txname::Name, strand::Strand, startSite::Site, txcds::[CDS] , endSite::Site }
+data Transcript = Transcript { txname::Name, strand::Strand, txcds::[CDS] }
                   deriving (Show)
 data Gene = Gene {gname :: Name , transcripts::[Transcript]}
             deriving (Show)
@@ -28,16 +28,19 @@ data Annotation = Annotation {seqentry :: Sequence, genes :: [Gene], source :: S
 
 sequence2 = Sequence "TEST2" 0 1000
 site5 =  Site "TEST2" 1 StartCodon
-site6 =  Site "TEST2" 100 StopCodon
+site6 =  Site "TEST2" 100 Donor
+site9 =  Site "TEST2" 120 Acceptor
+site10 =  Site "TEST2" 130 Donor
+site11 =  Site "TEST2" 150 Acceptor
+site12 =  Site "TEST2" 160 StopCodon
 site7 = Site "TEST2" 1 StopCodon
 site8 = Site "TEST2" 100 StartCodon
 cds2 = CDS site5 site6 0
-tx4 = Transcript "C.1" "+" site5 [cds2] site6
-tx5 = Transcript "D.1" "-" site7 [cds2] site8
-tx6 = Transcript "D.2" "+" site5 [cds2] site6
+cds3 = CDS site9 site10 0
+cds4 = CDS site11 site12 0
+tx4 = Transcript "C.1" "+"  [cds2, cds3, cds4]
 gene3 = Gene "C" [tx4]
-gene4 = Gene "D" [tx5, tx6]
-annot1 = Annotation sequence2 [gene3, gene4] "tops"
+annot1 = Annotation sequence2 [gene3] "tops"
 
 
 sequence1 = Sequence "TEST1" 0 1000
@@ -46,9 +49,10 @@ site2 =  Site "TEST1" 100 StopCodon
 site3 = Site "TEST1" 1 StopCodon
 site4 = Site "TEST1" 100 StartCodon
 cds1 = CDS site1 site2 0
-tx1 = Transcript "A.1" "+" site1 [cds1] site2
-tx2 = Transcript "B.1" "-" site3 [cds1] site4
-tx3 = Transcript "B.2" "+" site1 [cds1] site2
+cds5 = CDS site3 site4 0
+tx1 = Transcript "A.1" "+"  [cds1]
+tx2 = Transcript "B.1" "-"  [cds5]
+tx3 = Transcript "B.2" "+"  [cds1]
 gene1 = Gene "A" [tx1]
 gene2 = Gene "B" [tx2, tx3]
 annot2 = Annotation sequence1 [gene1, gene2] "test"
