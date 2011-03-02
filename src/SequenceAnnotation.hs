@@ -6,12 +6,12 @@ import Maybe
 
 type Name = String
 type Strand = String
+
 data SiteType = StartCodon
               | StopCodon
               | Acceptor
               | Donor
                 deriving (Show)
-
 data Sequence = Sequence {seqname::Name, seqstart:: Integer, seqend::Integer}
                 deriving (Show)
 data Site = Site {parentseq::Name, position:: Integer, stype:: SiteType}
@@ -44,10 +44,10 @@ annot1 = Annotation sequence2 [gene3] "tops"
 
 
 sequence1 = Sequence "TEST1" 0 1000
-site1 =  Site "TEST1" 1 StartCodon
-site2 =  Site "TEST1" 100 StopCodon
-site3 = Site "TEST1" 1 StopCodon
-site4 = Site "TEST1" 100 StartCodon
+site1 =  Site "TEST1" 100 StartCodon
+site2 =  Site "TEST1" 140 StopCodon
+site3 = Site "TEST1" 110 StopCodon
+site4 = Site "TEST1" 120 StartCodon
 cds1 = CDS site1 site2 0
 cds5 = CDS site3 site4 0
 tx1 = Transcript "A.1" "+"  [cds1]
@@ -77,5 +77,73 @@ getgene :: Annotation -> String -> Gene
 getgene a id = fromJust (find ( \ x ->( (gname x) == id) ) (genes a))
 
 
+getAcceptorSites :: Transcript  -> [Site]
+getAcceptorSites tx = case (strand tx) == "+" of
+                       True -> filter isSite (map (\ cds -> cstart cds)  (txcds tx))
+                       False -> filter isSite (map (\ cds -> cend cds)  (txcds tx))
+                     where isSite site =  case stype site of
+                                               Acceptor -> True
+                                               _ -> False
 
+getStartCodonSites :: Transcript  -> [Site]
+getStartCodonSites tx = case (strand tx) == "+" of
+                       True -> filter isSite (map (\ cds -> cstart cds)  (txcds tx))
+                       False -> filter isSite (map (\ cds -> cend cds)  (txcds tx))
+                     where isSite site =  case stype site of
+                                               StartCodon -> True
+                                               _ -> False
+
+getDonorSites :: Transcript  -> [Site]
+getDonorSites tx = case (strand tx) == "+" of
+                       True -> filter isSite (map (\ cds -> cend cds)  (txcds tx))
+                       False -> filter isSite (map (\ cds -> cstart cds)  (txcds tx))
+                     where isSite site =  case stype site of
+                                               Donor -> True
+                                               _ -> False
+
+getStopCodonSites :: Transcript  -> [Site]
+getStopCodonSites tx = case (strand tx) == "+" of
+                       True -> filter isSite (map (\ cds -> cend cds)  (txcds tx))
+                       False -> filter isSite (map (\ cds -> cstart cds)  (txcds tx))
+                     where isSite site =  case stype site of
+                                               StopCodon -> True
+                                               _ -> False
+
+getIntrons :: Transcript -> [(Integer, Integer)]
+getIntrons tx = case (strand tx ) == "+" of
+                 True -> getIntronForward tx
+                 False -> getIntronReverse tx
+               where getIntronForward tx = zip  (map (addPosition 1)  $ getDonorSites tx) (map (addPosition (-1)) $ getAcceptorSites tx)
+                     getIntronReverse tx = zip  (map (addPosition 1)  $ getAcceptorSites tx) (map (addPosition (-1)) $ getDonorSites tx)
+                     addPosition n site  = ((position site) +1)
+
+getExons :: Transcript -> [(Integer, Integer)]
+getExons tx = map (\ cds -> ((position $ cstart cds), (position $ cend cds))) (txcds tx)
+
+getGenePosition :: Gene -> (Integer, Integer)
+getGenePosition g = (minimum positions, maximum positions)
+           where positions = concat $ map (\ cds -> [(position $ cstart cds), (position $cend cds)] ) ( concat $ map (\ tx -> txcds tx) (transcripts g))
+
+disjointIntervals :: [(Integer, Integer)] -> [(Integer, Integer)]
+disjointIntervals intervals = joinIntervals (sort intervals)
+                  where joinIntervals [] = []
+                        joinIntervals ([(a,b)]) = [(a,b)]
+                        joinIntervals ([(a,b),(c,d)]) =  case ((a <= c ) && (c <= b+1)) of
+                                                           True -> [(a,e)] where e = maximum [b,d]
+                                                           False -> [(a,b), (c,d)]
+                        joinIntervals ((a,b):(c,d):xs) = case ((a <= c ) && (c <= b+1)) of
+                                                           True -> joinIntervals ((a,e):xs) where e = maximum [b,d]
+                                                           False -> [(a,b)] ++ joinIntervals ((c,d):xs)
+
+complementIntervals :: [(Integer, Integer)] -> [(Integer, Integer)]
+complementIntervals intervals = complement ((0,0):intervals)
+                                 where complement [] = []
+                                       complement ([(a,b),(c,d)]) = case (b < c - 1) of
+                                                                      True -> [(b+1, c-1), (d+1, d+1000)]
+                                                                      False ->[(d+1, d+1000)]
+                                       complement ((a,b):(c,d):xs) =  [(b+1, c-1)] ++ (complement ((c,d):xs))
+
+
+getIntergenicRegions :: Annotation -> [(Integer, Integer)]
+getIntergenicRegions a = complementIntervals $ disjointIntervals  (map (\ gene -> getGenePosition gene ) (genes a))
 
