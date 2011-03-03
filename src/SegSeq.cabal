@@ -7,6 +7,6 @@ Author:              Andre Yoshiaki Kashiwabara
 Maintainer:          akashiwabara@usp.br
 Build-Type:          Simple
 Cabal-Version:       >=1.2
-Executable segseq-sites
-           Main-is:           segseq-sites.hs
+Executable segseq
+           Main-is:           segseq.hs
            Build-Depends:     base >= 3 && < 5, parsec, directory, haskell98, deepseq, process

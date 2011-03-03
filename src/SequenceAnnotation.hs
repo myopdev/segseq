@@ -76,7 +76,7 @@ getgene :: Annotation -> String -> Gene
 getgene a id = fromJust (find ( \ x ->( (gname x) == id) ) (genes a))
 
 
-getSites :: SiteType -> (Transcript -> [Site])
+getSites :: SiteType -> Transcript -> [Site]
 getSites stype' = case stype' of
                         StartCodon -> getStartCodonSites
                         StopCodon -> getStopCodonSites
@@ -121,7 +121,7 @@ getIntrons tx = case (strand tx ) == "+" of
                  False -> getIntronReverse tx
                where getIntronForward tx = zip  (map (addPosition 1)  $ getDonorSites tx) (map (addPosition (-1)) $ getAcceptorSites tx)
                      getIntronReverse tx = zip  (map (addPosition 1)  $ getAcceptorSites tx) (map (addPosition (-1)) $ getDonorSites tx)
-                     addPosition n site  = ((position site) +1)
+                     addPosition n site  = ((position site) +n)
 
 getExons :: Transcript -> [(Integer, Integer)]
 getExons tx = map (\ cds -> ((position $ cstart cds), (position $ cend cds))) (txcds tx)
