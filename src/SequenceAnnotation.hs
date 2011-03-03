@@ -1,4 +1,3 @@
-
 module SequenceAnnotation where
 
 import Data.List
