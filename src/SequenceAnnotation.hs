@@ -76,6 +76,13 @@ getgene :: Annotation -> String -> Gene
 getgene a id = fromJust (find ( \ x ->( (gname x) == id) ) (genes a))
 
 
+getSites :: SiteType -> (Transcript -> [Site])
+getSites stype' = case stype' of
+                        StartCodon -> getStartCodonSites
+                        StopCodon -> getStopCodonSites
+                        Acceptor -> getAcceptorSites
+                        Donor -> getDonorSites
+
 getAcceptorSites :: Transcript  -> [Site]
 getAcceptorSites tx = case (strand tx) == "+" of
                        True -> filter isSite (map (\ cds -> cstart cds)  (txcds tx))
@@ -145,4 +152,5 @@ complementIntervals intervals = complement ((0,0):intervals)
 
 getIntergenicRegions :: Annotation -> [(Integer, Integer)]
 getIntergenicRegions a = complementIntervals $ disjointIntervals  (map (\ gene -> getGenePosition gene ) (genes a))
+
 
