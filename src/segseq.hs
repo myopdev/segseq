@@ -23,13 +23,6 @@ main =  do
            hClose gtfh
            return ()
 
-hGetContentsStrict h = do
-    b <- hIsEOF h
-    if b then return [] else do
-      c <- hGetChar h
-      r <- hGetContentsStrict h
-      return (c:r)
-
 processSites :: Handle -> Handle -> ([String], [String])-> IO()
 processSites fh rh (f,r)= do
                              forkIO $ do mapM_ (hPutStrLn fh) f
@@ -46,9 +39,9 @@ run s a=   do
              (sinR, soutR, serrR, pidR) <- runInteractiveCommand   $ " cdbyank " ++ (fasta s) ++ ".cidx " ++ " -d " ++ (fasta s) ++ " -R | reverse_complement.pl "
              hSetBinaryMode sinF False
              hSetBinaryMode sinR False
-             return  (extractSites (siteName s) s a) >>= (processSites sinF sinR)
-             hGetContents soutF >>= putStrLn
-             hGetContents soutR >>= putStrLn
+             return  (extractContent s a) >>= (processSites sinF sinR)
+             hGetContents soutF >>= putStr
+             hGetContents soutR >>= putStr
              hGetContents serrF >>= hPutStrLn stderr
              hGetContents serrR >>= hPutStrLn stderr
              waitForProcess pidF

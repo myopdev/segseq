@@ -38,9 +38,12 @@ offsetp = Offset . fromMaybe "3"
 compilerOpts :: [String] -> IO ([Flag],[String])
 compilerOpts argv =
   case getOpt Permute options argv of
-     (o,n,[]) -> return (o,n)
-     (_,_,errs) -> ioError(userError (concat errs ++ usageInfo header options))
-  where header = "Usage: segseq -g <gtf file> -f <fasta file> -d <output dir>"
+     (o,n,errs) -> case (length o == 0) of
+                     True -> ioError(userError (concat errs ++ usageInfo header options))
+                     False -> case (length errs == 0) of
+                                True -> return (o,n)
+                                False-> ioError(userError (concat errs ++ usageInfo header options))
+  where header = "Usage: segseq -g <gtf file> -f <fasta file> -x [initial|internal|final|all-exons|intron|sites]"
 
 
 
@@ -85,33 +88,131 @@ buildSettings settings (opts,n)  =  foldr nextOption defaults opts
 
 
 
-extractSites:: SiteType -> Settings -> [Annotation] -> ([String], [String])
-extractSites stype' settings  []  =  ([],[] )
-extractSites  stype' settings  (a:rest)  =   (fst (x) ++ fst(y), snd(x) ++ snd(y))
-                                             where x = sitesFromGenes stype' settings (genes a)
-                                                   y = extractSites stype' settings rest
+extractFeature :: Settings -> [a] -> (Settings -> a -> [b] -> ([String],[String]) ) -> (a ->[b]) -> ([String], [String])
+extractFeature s [] k y = ([],[])
+extractFeature s (a:rest) k y = (fst(r1) ++ fst(r2), snd(r1) ++ snd(r2))
+                               where  r1 = k s a (y a)
+                                      r2 = extractFeature s rest k y
 
-sitesFromGenes :: SiteType -> Settings -> [Gene] -> ([String], [String])
-sitesFromGenes stype' s [] =  ([],[] )
-sitesFromGenes stype' s (g:genes)  = (fst (x) ++ fst(y), snd(x) ++ snd(y))
-                                      where x = sitesFromTranscripts stype' s (transcripts g)
-                                            y = sitesFromGenes stype' s genes
+extractContent :: Settings -> [Annotation] -> ([String], [String])
+extractContent s a | feature s == "initial" = extractInitialExons s a
+                   | feature s == "internal" = extractInternalExons s a
+                   | feature s == "final" = extractFinalExons s a
+                   | feature s == "sites" = extractSites s a
+                   | feature s == "intron" = extractIntrons s a
+                   | feature s == "all-exons" = extractExons s a
+                   | feature s == "intergenic" = extractIntergenic s a
+                   | otherwise = extractExons s a
 
-sitesFromTranscripts :: SiteType -> Settings -> [Transcript] -> ([String], [String])
-sitesFromTranscripts stype' s []  =   ([],[] )
-sitesFromTranscripts stype' s (t:txs) = (fst (x) ++ fst(y), snd(x) ++ snd(y))
-                                       where x = getSiteString s t (getSites stype' t)
-                                             y = sitesFromTranscripts stype' s txs
+extractIntergenic :: Settings -> [Annotation] -> ([String], [String])
+extractIntergenic s a = (concat $ map (\ annot -> printIntergenic annot) a, [])
+                  where printIntergenic annot = map (\ positions -> printSequence name (fst positions) (snd positions) ) (getIntergenicRegions annot)
+                          where name = seqname (seqentry annot)
 
+
+
+extractIntrons :: Settings -> [Annotation] -> ([String], [String])
+extractIntrons s a = extractFeature s a fromGenes (\ annot -> genes annot)
+                    where fromGenes s p g = extractFeature s g fromTranscripts ( \ gene -> transcripts gene )
+                          fromTranscripts s p t = extractFeature s t fromIntrons ( \ txs -> (getIntrons txs) )
+                          fromIntrons s p introns = case (strand p == "+") of
+                                                       True ->  (seqstr, [])
+                                                       False -> ([],seqstr)
+                                                    where seqstr = map ( \ i -> printSequence seqname (fst i) (snd i) ) introns
+                                                          seqname = parentseq (cstart ((txcds p) !! 0))
+
+
+
+
+extractFinalExons :: Settings -> [Annotation] -> ([String], [String])
+extractFinalExons s a = extractFeature s a fromGenes (\ x -> genes x)
+                 where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                       fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
+                       fromCDS s p (c:_)= case (stype (cstart c)) of
+                                             Acceptor -> case (stype (cend c)) of
+                                                           StopCodon -> forward
+                                                           _ -> ([],[])
+                                             StopCodon -> case (stype (cend c)) of
+                                                           Acceptor -> reverse
+                                                           _ -> ([],[])
+                                             _ -> ([],[])
+                                             where forward = ([seqstr],[])
+                                                   reverse = ([], [seqstr])
+                                                   seqstr = printSequence (parentseq (cstart c))
+                                                                          (position (cstart c))
+                                                                          (position (cend c))
+
+
+
+extractInternalExons :: Settings -> [Annotation] -> ([String], [String])
+extractInternalExons s a = extractFeature s a fromGenes (\ x -> genes x)
+                 where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                       fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
+                       fromCDS s p (c:_)= case (stype (cstart c)) of
+                                             Acceptor -> case (stype (cend c)) of
+                                                           Donor -> forward
+                                                           _ -> ([],[])
+                                             Donor -> case (stype (cend c)) of
+                                                           Acceptor -> reverse
+                                                           _ -> ([],[])
+                                             _ -> ([],[])
+                                             where forward = ([seqstr],[])
+                                                   reverse = ([], [seqstr])
+                                                   seqstr = printSequence (parentseq (cstart c))
+                                                                          (position (cstart c))
+                                                                          (position (cend c))
+
+
+
+extractInitialExons :: Settings -> [Annotation] -> ([String], [String])
+extractInitialExons s a = extractFeature s a fromGenes (\ x -> genes x)
+                 where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                       fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
+                       fromCDS s p (c:_)= case (stype (cstart c)) of
+                                             StartCodon -> forward
+                                             Donor -> case (stype (cend c)) of
+                                                        StartCodon -> reverse
+                                                        _ -> ([],[])
+                                             _ -> ([],[])
+                                            where forward = ([seqstr],[])
+                                                  reverse = ([], [seqstr])
+                                                  seqstr = printSequence (parentseq (cstart c))
+                                                                         (position (cstart c))
+                                                                         (position (cend c))
+
+
+
+extractExons :: Settings -> [Annotation] -> ([String], [String])
+extractExons s a = extractFeature s a fromGenes (\ x -> genes x)
+                   where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                         fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                         fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
+                         fromCDS s p (c:_)= case (stype (cstart c)) of
+                                             StartCodon -> forward
+                                             Acceptor -> forward
+                                             Donor -> reverse
+                                             StopCodon -> reverse
+                                            where forward = ([seqstr],[])
+                                                  reverse = ([], [seqstr])
+                                                  seqstr = printSequence (parentseq (cstart c))
+                                                                         (position (cstart c))
+                                                                         (position (cend c))
+
+
+extractSites :: Settings -> [Annotation] -> ([String], [String])
+extractSites s a = extractFeature s a fromGenes (\ annot -> genes annot)
+                    where fromGenes s p g = extractFeature s g fromTranscripts ( \ gene -> transcripts gene )
+                          fromTranscripts s p t = extractFeature s t fromSiteList ( \ txs -> (getSites (siteName s) txs) )
+                          fromSiteList s p sites = getSiteString s p sites
 
 getSiteString ::  Settings -> Transcript -> [Site] -> ([String], [String])
 getSiteString s t [] =  ([],[] )
-getSiteString  s t (site:sites) = (fst (x) ++ fst(y), snd(x) ++ snd(y))
+getSiteString s t (site:sites) = (fst (x) ++ fst(y), snd(x) ++ snd(y))
                                   where x = singleSiteToStr s t site
                                         y = getSiteString s t sites
-
-
-
 
 singleSiteToStr :: Settings -> Transcript -> Site -> ([String], [String])
 singleSiteToStr s t site =
@@ -158,3 +259,4 @@ siteName s | feature s == "start" = StartCodon
 
 printSequence :: Name -> Integer -> Integer -> String
 printSequence n s e = n ++ " " ++ " " ++ show (s) ++ " " ++ show e
+
