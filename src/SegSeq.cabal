@@ -1,0 +1,12 @@
+Name:                segseq
+Version:             0.0
+Description:         Useful tool to segment sequences for gene prediction training
+License:             GPL
+License-file:        LICENSE
+Author:              Andre Yoshiaki Kashiwabara
+Maintainer:          akashiwabara@usp.br
+Build-Type:          Simple
+Cabal-Version:       >=1.2
+Executable segseq-sites
+           Main-is:           segseq-sites.hs
+           Build-Depends:     base >= 3 && < 5, parsec, directory, haskell98, deepseq, process

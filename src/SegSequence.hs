@@ -85,69 +85,67 @@ buildSettings settings (opts,n)  =  foldr nextOption defaults opts
 
 
 
+extractSites:: SiteType -> Settings -> [Annotation] -> ([String], [String])
+extractSites stype' settings  []  =  ([],[] )
+extractSites  stype' settings  (a:rest)  =   (fst (x) ++ fst(y), snd(x) ++ snd(y))
+                                             where x = sitesFromGenes stype' settings (genes a)
+                                                   y = extractSites stype' settings rest
 
-extractSite:: SiteType->Handle -> Handle -> Settings -> [Annotation] -> IO()
-extractSite stype' forward reverse settings  [] = return ()
-extractSite stype' forward reverse settings  (a:rest) = do
-                                                         saveSiteFromAnnotation stype' forward reverse settings a
-                                                         extractSite stype' forward reverse settings rest
-                                                         return ()
+sitesFromGenes :: SiteType -> Settings -> [Gene] -> ([String], [String])
+sitesFromGenes stype' s [] =  ([],[] )
+sitesFromGenes stype' s (g:genes)  = (fst (x) ++ fst(y), snd(x) ++ snd(y))
+                                      where x = sitesFromTranscripts stype' s (transcripts g)
+                                            y = sitesFromGenes stype' s genes
 
-
-
-saveSiteFromAnnotation :: SiteType -> Handle -> Handle -> Settings ->  Annotation -> IO()
-saveSiteFromAnnotation stype' forward reverse s a  = do  mapM (saveSiteFromGene stype' forward reverse s) $ genes a
-                                                         return ()
-
-saveSiteFromGene :: SiteType -> Handle -> Handle -> Settings -> Gene -> IO()
-saveSiteFromGene stype' forward reverse s g = do
-                                                mapM (saveSiteFromTranscript stype' forward reverse s) $ transcripts g
-                                                return ()
-saveSiteFromTranscript :: SiteType -> Handle -> Handle -> Settings -> Transcript -> IO()
-saveSiteFromTranscript stype' forward reverse s  t = do
-                                                      mapM (saveSite forward reverse s t)  $ (getSites stype') t
-                                                      return ()
+sitesFromTranscripts :: SiteType -> Settings -> [Transcript] -> ([String], [String])
+sitesFromTranscripts stype' s []  =   ([],[] )
+sitesFromTranscripts stype' s (t:txs) = (fst (x) ++ fst(y), snd(x) ++ snd(y))
+                                       where x = getSiteString s t (getSites stype' t)
+                                             y = sitesFromTranscripts stype' s txs
 
 
-printSequence ::  Handle -> Name -> Integer -> Integer -> IO()
-printSequence  cdbyank n s e = do
-                                 hPutStrLn  cdbyank  ( n ++ " " ++ (show s) ++ " " ++ (show e))
-                                 return ()
+getSiteString ::  Settings -> Transcript -> [Site] -> ([String], [String])
+getSiteString s t [] =  ([],[] )
+getSiteString  s t (site:sites) = (fst (x) ++ fst(y), snd(x) ++ snd(y))
+                                  where x = singleSiteToStr s t site
+                                        y = getSiteString s t sites
 
 
-saveSite :: Handle -> Handle -> Settings -> Transcript -> Site -> IO()
-saveSite forward reverse s t site =
+
+
+singleSiteToStr :: Settings -> Transcript -> Site -> ([String], [String])
+singleSiteToStr s t site =
          case stype site of
             StartCodon ->case (strand t == "+") of
-                               True -> printSequence forward (parentseq site)
-                                                             ((position site) - (offset s))
-                                                             ((position site) - (offset s) + (length' s) - 1)
-                               False -> printSequence reverse (parentseq site)
-                                                              ((position site) + (offset s) - (length' s) + 1)
-                                                              ((position site) + (offset s))
+                               True -> ([printSequence  (parentseq site)
+                                                        ((position site) - (offset s))
+                                                        ((position site) - (offset s) + (length' s) - 1)],[])
+                               False -> ([],[printSequence (parentseq site)
+                                                           ((position site) + (offset s) - (length' s) + 1)
+                                                           ((position site) + (offset s))])
             Donor -> case (strand t == "+") of
-                       True -> printSequence forward (parentseq site)
-                                                     ((position site) - (offset s) + 1)
-                                                     ((position site) - (offset s) + (length' s) )
-                       False -> printSequence reverse (parentseq site)
-                                                      ((position site) + (offset s) - (length' s) )
-                                                      ((position site) + (offset s) - 1)
+                       True -> ([printSequence (parentseq site)
+                                             ((position site) - (offset s) + 1)
+                                             ((position site) - (offset s) + (length' s) )] ,[])
+                       False -> ([], [printSequence (parentseq site)
+                                                    ((position site) + (offset s) - (length' s) )
+                                              ((position site) + (offset s) - 1)])
 
             Acceptor ->  case (strand t == "+") of
-                               True -> printSequence forward (parentseq site)
-                                                             ((position site) - (offset s) - 2)
-                                                             ((position site) - (offset s) + (length' s) - 3)
-                               False -> printSequence reverse (parentseq site)
-                                                              ((position site) + (offset s) - (length' s) + 3)
-                                                              ((position site) + (offset s) + 2)
+                               True -> ([printSequence (parentseq site)
+                                                       ((position site) - (offset s) - 2)
+                                                       ((position site) - (offset s) + (length' s) - 3)],[])
+                               False -> ([], [printSequence (parentseq site)
+                                                            ((position site) + (offset s) - (length' s) + 3)
+                                                             ((position site) + (offset s) + 2) ])
 
             StopCodon -> case (strand t == "+") of
-                               True -> printSequence forward (parentseq site)
-                                                             ((position site) - (offset s) + 1)
-                                                             ((position site) - (offset s) + (length' s) )
-                               False -> printSequence reverse (parentseq site)
-                                                              ((position site) + (offset s) - (length' s) )
-                                                              ((position site) + (offset s) - 1)
+                               True -> ([printSequence (parentseq site)
+                                                       ((position site) - (offset s) + 1)
+                                                       ((position site) - (offset s) + (length' s) )], [])
+                               False -> ([], [printSequence (parentseq site)
+                                                            ((position site) + (offset s) - (length' s) )
+                                                            ((position site) + (offset s) - 1)])
 
 siteName :: Settings -> SiteType
 siteName s | feature s == "start" = StartCodon
@@ -155,3 +153,8 @@ siteName s | feature s == "start" = StartCodon
            | feature s == "acceptor" = Acceptor
            | feature s == "donor" = Donor
            | otherwise = StartCodon
+
+
+
+printSequence :: Name -> Integer -> Integer -> String
+printSequence n s e = n ++ " " ++ " " ++ show (s) ++ " " ++ show e
