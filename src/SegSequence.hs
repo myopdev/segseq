@@ -102,6 +102,7 @@ extractContent s a | feature s == "initial" = extractInitialExons s a
                    | feature s == "intron" = extractIntrons s a
                    | feature s == "all-exons" = extractExons s a
                    | feature s == "intergenic" = extractIntergenic s a
+                   | feature s == "single" = extractSingleExons s a
                    | otherwise = extractExons s a
 
 extractIntergenic :: Settings -> [Annotation] -> ([String], [String])
@@ -121,6 +122,26 @@ extractIntrons s a = extractFeature s a fromGenes (\ annot -> genes annot)
                                                     where seqstr = map ( \ i -> printSequence seqname (fst i) (snd i) ) introns
                                                           seqname = parentseq (cstart ((txcds p) !! 0))
 
+
+
+extractSingleExons :: Settings -> [Annotation] -> ([String], [String])
+extractSingleExons s a = extractFeature s a fromGenes (\ x -> genes x)
+                 where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                       fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
+                       fromCDS s p (c:_)= case (stype (cstart c)) of
+                                             StartCodon -> case (stype (cend c)) of
+                                                            StopCodon -> forward
+                                                            _ -> ([],[])
+                                             StopCodon -> case (stype (cend c)) of
+                                                           StartCodon -> reverse
+                                                           _ -> ([],[])
+                                             _ -> ([],[])
+                                             where forward = ([seqstr],[])
+                                                   reverse = ([], [seqstr])
+                                                   seqstr = printSequence (parentseq (cstart c))
+                                                                          (position (cstart c))
+                                                                          (position (cend c))
 
 
 
