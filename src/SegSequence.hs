@@ -94,6 +94,14 @@ extractFeature s (a:rest) k y = (fst(r1) ++ fst(r2), snd(r1) ++ snd(r2))
                                where  r1 = k s a (y a)
                                       r2 = extractFeature s rest k y
 
+
+extractFeatureList :: Settings -> [a] -> (Settings -> a -> [b] -> [([String],[String])] ) -> (a ->[b]) -> [([String], [String])]
+extractFeatureList s [] k y = [([],[])]
+extractFeatureList s (a:rest) k y = r1 ++ r2
+                               where  r1 = k s a (y a)
+                                      r2 = extractFeatureList s rest k y
+
+
 extractContent :: Settings -> [Annotation] -> ([String], [String])
 extractContent s a | feature s == "initial" = extractInitialExons s a
                    | feature s == "internal" = extractInternalExons s a
@@ -104,6 +112,8 @@ extractContent s a | feature s == "initial" = extractInitialExons s a
                    | feature s == "intergenic" = extractIntergenic s a
                    | feature s == "single" = extractSingleExons s a
                    | otherwise = extractExons s a
+
+
 
 extractIntergenic :: Settings -> [Annotation] -> ([String], [String])
 extractIntergenic s a = (concat $ map (\ annot -> printIntergenic annot) a, [])
@@ -198,6 +208,23 @@ extractInitialExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                                         StartCodon -> reverse
                                                         _ -> ([],[])
                                              _ -> ([],[])
+                                            where forward = ([seqstr],[])
+                                                  reverse = ([], [seqstr])
+                                                  seqstr = printSequence (parentseq (cstart c))
+                                                                         (position (cstart c))
+                                                                         (position (cend c))
+
+
+extractCDS :: Settings -> [Annotation] -> [([String], [String])]
+extractCDS s a = extractFeatureList s a fromGenes (\ x -> genes x)
+                   where fromGenes s p g = extractFeatureList s g fromTranscripts ( \ x -> transcripts x )
+                         fromTranscripts s p t = extractFeatureList s t fromCDSList ( \x -> txcds x )
+                         fromCDSList s p c = [extractFeature s c fromCDS ( \x -> [x] )]
+                         fromCDS s p (c:_)= case (stype (cstart c)) of
+                                             StartCodon -> forward
+                                             Acceptor -> forward
+                                             Donor -> reverse
+                                             StopCodon -> reverse
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstr])
                                                   seqstr = printSequence (parentseq (cstart c))
