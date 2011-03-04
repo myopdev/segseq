@@ -13,26 +13,27 @@ import GTF
 import Data.Maybe
 import System.Directory(getTemporaryDirectory, removeFile)
 import Control.Concurrent
+import qualified Data.ByteString.Char8 as B
 
 main :: IO()
 main =  do
            args <- getArgs
            s <- (liftM (buildSettings (Settings "" "" "" 9 3))) $ (compilerOpts args)
            gtfh <- openFile (gtf s) ReadMode
-           (hGetContents gtfh) >>= (return . createAnnotationList . readCSV) >>= (run s)
+           (B.hGetContents gtfh) >>= (return . createAnnotationList . readCSV . B.unpack) >>= (run s)
            hClose gtfh
            return ()
 
 
-getSequenceFromCDBYank :: Settings -> String -> (String -> IO(String)) -> String-> IO(String)
+getSequenceFromCDBYank :: Settings -> String -> (B.ByteString -> IO(B.ByteString)) -> String-> IO(B.ByteString)
 getSequenceFromCDBYank s strand k key  = do
                               (sin, sout, serr, pid) <- runInteractiveCommand   $ strandSpecificCommand
                               hSetBinaryMode sin False
                               forkIO $ do return(key) >>= hPutStrLn sin
                                           hFlush sin
                                           hClose sin
-                              ret <- (hGetContents sout)
-                              ret `deepseq` waitForProcess pid
+                              ret <- (B.hGetContents sout)
+                              waitForProcess pid
                               k (ret)
                     where strandSpecificCommand = case (strand == "+") of
                                                     True -> " cdbyank " ++ (fasta s) ++ ".cidx " ++ " -d  " ++ (fasta s) ++ " -R -x 2> err "
@@ -57,8 +58,8 @@ mergeListCDS :: Settings-> [([String], [String])] -> IO()
 mergeListCDS s [] = return()
 mergeListCDS s ((f,r):rest) = do  a<-getForwardCDS s f
                                   b<-getReverseCDS s r
-                                  return (((mergeCDS 0) . lines) a) >>= putStr
-                                  return (((mergeCDS 0) . lines) b) >>= putStr
+                                  return ((B.pack . (mergeCDS 0) . lines . B.unpack) a) >>= B.putStr
+                                  return ((B.pack . (mergeCDS 0) . lines . B.unpack) b) >>= B.putStr
                                   mergeListCDS s rest
                                   return()
 mergeCDS ::Integer -> [String]-> String
@@ -69,19 +70,19 @@ mergeCDS c (s:rest)  = case ( (s !! 0) == '>')   of
                                  False ->  mergeCDS (c+1) rest
                        False -> s ++ "\n" ++ mergeCDS c rest
 
-getForwardCDS :: Settings -> [String] -> IO(String)
-getForwardCDS s [] = return("")
+getForwardCDS :: Settings -> [String] -> IO(B.ByteString)
+getForwardCDS s [] = return(B.pack "")
 getForwardCDS s (l:rest) =  do
                            a <- (getSequenceFromCDBYank s "+" (\x -> return (x)))  l
                            b <- getForwardCDS s rest
-                           return (a ++ b)
+                           return (a `B.append` b)
 
-getReverseCDS :: Settings -> [String] -> IO(String)
-getReverseCDS s [] = return("")
+getReverseCDS :: Settings -> [String] -> IO(B.ByteString)
+getReverseCDS s [] = return(B.pack "")
 getReverseCDS s (l:rest) =  do
                            a <- (getSequenceFromCDBYank s "-" (\x -> return (x))) l
                            b <- getReverseCDS s rest
-                           return (b ++ a)
+                           return (b `B.append` a)
 
 getSimpleFeature :: Settings -> [Annotation] -> IO()
 getSimpleFeature s a = do
@@ -97,7 +98,7 @@ printSimpleFeature s strand (x:xs) = do
                                         printSimpleFeature s strand xs
                                         return()
 
-printAndReturn :: String -> IO (String)
+printAndReturn :: B.ByteString -> IO (B.ByteString)
 printAndReturn s = do
-                      putStr s
+                      B.putStr s
                       return(s)
