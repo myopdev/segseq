@@ -106,7 +106,10 @@ extractContent :: Settings -> [Annotation] -> ([String], [String])
 extractContent s a | feature s == "initial" = extractInitialExons s a
                    | feature s == "internal" = extractInternalExons s a
                    | feature s == "final" = extractFinalExons s a
-                   | feature s == "sites" = extractSites s a
+                   | feature s == "acceptor" = extractSites s a
+                   | feature s == "donor" = extractSites s a
+                   | feature s == "start" = extractSites s a
+                   | feature s == "stop" = extractSites s a
                    | feature s == "intron" = extractIntrons s a
                    | feature s == "all-exons" = extractExons s a
                    | feature s == "intergenic" = extractIntergenic s a
