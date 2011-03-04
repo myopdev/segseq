@@ -102,6 +102,17 @@ extractFeatureList s (a:rest) k y = r1 ++ r2
                                       r2 = extractFeatureList s rest k y
 
 
+extractFeatureJoin :: Settings -> [a] -> (Settings -> a -> [b] -> ([String],[String]) ) -> (a ->[b]) -> ([String], [String])
+extractFeatureJoin s [] k y = ([],[])
+extractFeatureJoin s (a:rest) k y =  ([(head' f1) ++ (head' f2)], [(head' r1) ++ (head' r2)])
+                               where  (f1,r1) = k s a (y a)
+                                      (f2,r2) = extractFeatureJoin s rest k y
+
+
+head' :: [String] -> String
+head' l = case (length l >= 1) of
+               True -> head l
+               False -> ""
 extractContent :: Settings -> [Annotation] -> ([String], [String])
 extractContent s a | feature s == "initial" = extractInitialExons s a
                    | feature s == "internal" = extractInternalExons s a
@@ -114,6 +125,7 @@ extractContent s a | feature s == "initial" = extractInitialExons s a
                    | feature s == "all-exons" = extractExons s a
                    | feature s == "intergenic" = extractIntergenic s a
                    | feature s == "single" = extractSingleExons s a
+                   | feature s == "cds" = extractCDS s a
                    | otherwise = extractExons s a
 
 
@@ -218,11 +230,18 @@ extractInitialExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                                                          (position (cend c))
 
 
-extractCDS :: Settings -> [Annotation] -> [([String], [String])]
-extractCDS s a = extractFeatureList s a fromGenes (\ x -> genes x)
-                   where fromGenes s p g = extractFeatureList s g fromTranscripts ( \ x -> transcripts x )
-                         fromTranscripts s p t = extractFeatureList s t fromCDSList ( \x -> txcds x )
-                         fromCDSList s p c = [extractFeature s c fromCDS ( \x -> [x] )]
+extractCDS :: Settings -> [Annotation] -> ([String], [String])
+extractCDS s a = extractFeature s a fromGenes (\ x -> genes x)
+                   where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                         fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                         fromCDSList s p c = ([case (length (fwd')>= 1 && (head fwd') /= "") of
+                                                    True -> (parentseq (cstart (c!!0))) ++ " " ++ (head fwd')++"\n"
+                                                    False -> ""],
+                                              [case (length (rev') >= 1 && (head rev') /= "") of
+                                                    True -> (parentseq (cstart (c!!0))) ++ " " ++ (head rev') ++ "\n"
+                                                    False -> ""])
+                                            where (fwd',rev') = extractFeatureJoin s c fromCDS ( \x -> [x] )
+
                          fromCDS s p (c:_)= case (stype (cstart c)) of
                                              StartCodon -> forward
                                              Acceptor -> forward
@@ -230,9 +249,7 @@ extractCDS s a = extractFeatureList s a fromGenes (\ x -> genes x)
                                              StopCodon -> reverse
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstr])
-                                                  seqstr = printSequence (parentseq (cstart c))
-                                                                         (position (cstart c))
-                                                                         (position (cend c))
+                                                  seqstr = " "++ show (position (cstart c)) ++ " " ++ show  (position (cend c))
 
 
 
@@ -309,5 +326,5 @@ siteName s | feature s == "start" = StartCodon
 
 
 printSequence :: Name -> Integer -> Integer -> String
-printSequence n s e = n ++ " " ++ " " ++ show (s) ++ " " ++ show e
+printSequence n s e = n ++ " " ++ " " ++ show (s) ++ " " ++ show e ++ "\n"
 
