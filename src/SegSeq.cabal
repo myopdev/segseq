@@ -9,4 +9,4 @@ Build-Type:          Simple
 Cabal-Version:       >=1.2
 Executable segseq
            Main-is:           segseq.hs
-           Build-Depends:     base >= 3 && < 5, parsec, directory, haskell98, deepseq, process
+           Build-Depends:     base >= 3 && < 5, parsec, directory, haskell98, deepseq, process, bytestring
