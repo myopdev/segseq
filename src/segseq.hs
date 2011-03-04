@@ -86,9 +86,16 @@ getReverseCDS s (l:rest) =  do
 getSimpleFeature :: Settings -> [Annotation] -> IO()
 getSimpleFeature s a = do
                  (f,r) <- return(extractContent s a)
-                 mapM_ (getSequenceFromCDBYank s "+" printAndReturn) f
-                 mapM_ (getSequenceFromCDBYank s "-" printAndReturn) r
+                 printSimpleFeature s "+" f
+                 printSimpleFeature s "-" r
                  return()
+
+printSimpleFeature :: Settings -> String -> [String] -> IO()
+printSimpleFeature s strand [] = return()
+printSimpleFeature s strand (x:xs) = do
+                                        (getSequenceFromCDBYank s strand printAndReturn) x
+                                        printSimpleFeature s strand xs
+                                        return()
 
 printAndReturn :: String -> IO (String)
 printAndReturn s = do
