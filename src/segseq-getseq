@@ -1,0 +1,64 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use GTF;
+use Getopt::Long;
+use Bio::SeqIO;
+use Bio::DB::Fasta;
+use Bio::Tools::SeqStats;
+use File::Path;
+
+
+my $fasta_filename;
+
+getopts();
+
+unlink ("$fasta_filename.index");
+my $db = Bio::DB::Fasta->new ("$fasta_filename");
+
+
+my $merging  = 0;
+my $seqio_object = Bio::SeqIO->new(-fh => \*STDOUT,
+                                   -format=>"FASTA");
+my $seqname2 = "";
+my $seq = "";
+while (<>) {
+  chomp;
+  my ($seqname, @positions) = split (/\s+/, $_);
+  my $seq = "";
+  my $length  =$db->length($seqname);
+  my $invalid = 0;
+  for (my $i = 0; $i < $#positions; $i+=2)
+    {
+      my $start = $positions[$i];
+      my $end = $positions[$i+1];
+      if ($start > $end || $start <= 0 || $end <= 0) {
+        $invalid = 1;
+        next ;
+      }
+      if ($start > $length ) { $start = $length;}
+      if ($end > $length ){
+        $end = $length
+      }
+      $seq .= $db->seq("$seqname:$start,$end");
+    }
+  if(!$invalid) {
+    my $seqobj = Bio::PrimarySeq->new (-seq => $seq,
+                                       -alphabet =>'dna',
+                                       -id => "$seqname");
+    $seqio_object ->write_seq($seqobj);
+  }
+}
+
+
+sub getopts {
+    GetOptions("fasta=s" => \$fasta_filename);
+
+    if(!defined ($fasta_filename)){
+        print STDERR "Missing gtf file ! \n";
+        print STDERR "$0 -f <fasta> ! \n";
+        exit();
+    }
+
+}
