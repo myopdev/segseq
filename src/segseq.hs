@@ -23,27 +23,74 @@ main =  do
            hClose gtfh
            return ()
 
-processSites :: Handle -> Handle -> ([String], [String])-> IO()
-processSites fh rh (f,r)= do
-                             forkIO $ do mapM_ (hPutStrLn fh) f
-                                         hClose fh
-                             forkIO $ do mapM_ (hPutStrLn rh) r
-                                         hClose rh
-                             return ()
+
+getSequenceFromCDBYank :: Settings -> String -> (String -> IO(String)) -> String-> IO(String)
+getSequenceFromCDBYank s strand k key  = do
+                              (sin, sout, serr, pid) <- runInteractiveCommand   $ strandSpecificCommand
+                              hSetBinaryMode sin False
+                              forkIO $ do return(key) >>= hPutStrLn sin
+                                          hFlush sin
+                                          hClose sin
+                              ret <- (hGetContents sout)
+                              ret `deepseq` waitForProcess pid
+                              k (ret)
+                    where strandSpecificCommand = case (strand == "+") of
+                                                    True -> " cdbyank " ++ (fasta s) ++ ".cidx " ++ " -d  " ++ (fasta s) ++ " -R -x 2> err "
+                                                    False -> " cdbyank " ++ (fasta s) ++ ".cidx " ++ " -d  " ++ (fasta s) ++ " -R -x 2>err| reverse_complement.pl "
+
 
 
 run :: Settings -> [Annotation] -> IO ()
 run s a=   do
              createIndexFromFasta (fasta s)
-             (sinF, soutF, serrF, pidF) <- runInteractiveCommand   $ " cdbyank " ++ (fasta s) ++ ".cidx " ++ " -d " ++ (fasta s) ++ " -R "
-             (sinR, soutR, serrR, pidR) <- runInteractiveCommand   $ " cdbyank " ++ (fasta s) ++ ".cidx " ++ " -d " ++ (fasta s) ++ " -R | reverse_complement.pl "
-             hSetBinaryMode sinF False
-             hSetBinaryMode sinR False
-             return  (extractContent s a) >>= (processSites sinF sinR)
-             hGetContents soutF >>= putStr
-             hGetContents soutR >>= putStr
-             hGetContents serrF >>= hPutStrLn stderr
-             hGetContents serrR >>= hPutStrLn stderr
-             waitForProcess pidF
-             waitForProcess pidR
+             case ( feature s == "cds" ) of
+                  True -> getJoinableFeature s a
+                  False -> getSimpleFeature s a
              return ();
+getJoinableFeature :: Settings -> [Annotation] -> IO()
+getJoinableFeature s a = do
+                            listCDS <- return (extractCDS s a)
+                            mergeListCDS s listCDS
+                            return()
+
+mergeListCDS :: Settings-> [([String], [String])] -> IO()
+mergeListCDS s [] = return()
+mergeListCDS s ((f,r):rest) = do  a<-getForwardCDS s f
+                                  b<-getReverseCDS s r
+                                  return (((mergeCDS 0) . lines) a) >>= putStr
+                                  return (((mergeCDS 0) . lines) b) >>= putStr
+                                  mergeListCDS s rest
+                                  return()
+mergeCDS ::Integer -> [String]-> String
+mergeCDS c []  = ""
+mergeCDS c (s:rest)  = case ( (s !! 0) == '>')   of
+                       True -> case (c == 0) of
+                                 True -> s ++ "\n" ++ mergeCDS (c+1) rest
+                                 False ->  mergeCDS (c+1) rest
+                       False -> s ++ "\n" ++ mergeCDS c rest
+
+getForwardCDS :: Settings -> [String] -> IO(String)
+getForwardCDS s [] = return("")
+getForwardCDS s (l:rest) =  do
+                           a <- (getSequenceFromCDBYank s "+" (\x -> return (x)))  l
+                           b <- getForwardCDS s rest
+                           return (a ++ b)
+
+getReverseCDS :: Settings -> [String] -> IO(String)
+getReverseCDS s [] = return("")
+getReverseCDS s (l:rest) =  do
+                           a <- (getSequenceFromCDBYank s "-" (\x -> return (x))) l
+                           b <- getReverseCDS s rest
+                           return (b ++ a)
+
+getSimpleFeature :: Settings -> [Annotation] -> IO()
+getSimpleFeature s a = do
+                 (f,r) <- return(extractContent s a)
+                 mapM_ (getSequenceFromCDBYank s "+" printAndReturn) f
+                 mapM_ (getSequenceFromCDBYank s "-" printAndReturn) r
+                 return()
+
+printAndReturn :: String -> IO (String)
+printAndReturn s = do
+                      putStr s
+                      return(s)
