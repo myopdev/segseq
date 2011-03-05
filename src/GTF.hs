@@ -169,7 +169,18 @@ createTranscript :: [[String]] -> Transcript
 createTranscript gtflines = Transcript name strand cds
                                        where name = getTranscriptNameFromGTFLine (gtflines !! 0)
                                              strand = (gtflines !! 0) !! 6
-                                             cds = (createCDSList gtflines (createStartSite gtflines)  (createStopSite gtflines))
+                                             cds = calculateCDSPhase (sortBy compareCDS ((createCDSList gtflines (createStartSite gtflines))  (createStopSite gtflines))) strand
+
+compareCDS :: CDS -> CDS -> Ordering
+compareCDS x y | (position $ cstart x) > (position $ cstart y)  = GT
+               | otherwise = LT
+
+calculateCDSPhase :: [CDS] -> String -> [CDS]
+calculateCDSPhase lcds strand = se (strand == "+")
+                                  (foldl (\ listCDS  c -> listCDS ++ [CDS (cstart c) (cend c) (getPhaseForward listCDS) ])  [head lcds] (tail  lcds))
+                                  (foldr (\ c listCDS -> [CDS (cstart c) (cend c) (getPhaseReverse listCDS) ] ++ listCDS)  [last lcds] (init lcds))
+                             where getPhaseForward l = (((position $cend $last(l)) - (position $cstart $last(l)) + 1) + phase (last (l))) `mod` 3
+                                   getPhaseReverse l = (((position $cend $head(l)) - (position $cstart $head(l)) + 1) + phase (head (l))) `mod` 3
 
 createStartSite :: [[String]] -> Site
 createStartSite gtflines = se (length y > 0)
