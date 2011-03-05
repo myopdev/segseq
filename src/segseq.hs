@@ -17,8 +17,7 @@ import qualified Data.ByteString.Char8 as B
 import Directory
 main :: IO()
 main =  do
-           args <- getArgs
-           s <- (liftM (buildSettings (Settings "" "" "" 9 3))) $ (compilerOpts args)
+           s <-  (getArgs >>= (return . compilerOpts) >>= (liftM (buildSettings (Settings "" "" "" 9 3 (-1)))))
            gtfh <- openFile (gtf s) ReadMode
            (B.hGetContents gtfh) >>= (return . createAnnotationList . readCSV . B.unpack) >>= (run s)
            hClose gtfh
