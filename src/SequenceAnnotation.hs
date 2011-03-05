@@ -69,48 +69,54 @@ gettranscript a id = fromJust (find ( \ x -> ( (txname x) == id ) ) txs)
               where txs = concat (Prelude.map ( \x -> transcripts x ) (genes a))
 
 
-getcds :: Transcript -> [CDS]
-getcds tx = txcds tx
+getCDSWithStartPhase ::   Integer -> Transcript -> [CDS]
+getCDSWithStartPhase phase' tx  | phase' >= 0  =  filter (\ x -> (phase x == phase')) (txcds tx)
+                                | otherwise = txcds tx
+
+getCDSWithEndPhase ::  Integer -> Transcript -> [CDS]
+getCDSWithEndPhase phase' tx | phase' >= 0  =  filter (\ x -> ((phase x) == ((phase' + ((position $cend x) - (position $cstart x)+1)) `mod` 3))) (txcds tx)
+                             | otherwise = txcds tx
 
 getgene :: Annotation -> String -> Gene
 getgene a id = fromJust (find ( \ x ->( (gname x) == id) ) (genes a))
 
 
-getSites :: SiteType -> Transcript -> [Site]
-getSites stype' = case stype' of
-                        StartCodon -> getStartCodonSites
-                        StopCodon -> getStopCodonSites
-                        Acceptor -> getAcceptorSites
-                        Donor -> getDonorSites
+getSites :: Integer-> SiteType ->Transcript -> [Site]
+getSites phase' stype' = case stype' of
+                        StartCodon -> getStartCodonSites phase'
+                        StopCodon -> getStopCodonSites phase'
+                        Acceptor -> getAcceptorSites phase'
+                        Donor -> getDonorSites phase'
 
-getAcceptorSites :: Transcript  -> [Site]
-getAcceptorSites tx = case (strand tx) == "+" of
-                       True -> filter isSite (map (\ cds -> cstart cds)  (txcds tx))
-                       False -> filter isSite (map (\ cds -> cend cds)  (txcds tx))
+getAcceptorSites :: Integer -> Transcript -> [Site]
+getAcceptorSites phase' tx  =
+                     case (strand tx) == "+" of
+                       True -> filter isSite (map (\ cds -> cstart cds)  (getCDSWithStartPhase  phase' tx ))
+                       False -> filter isSite (map (\ cds -> cend cds)  (getCDSWithStartPhase phase' tx))
                      where isSite site =  case stype site of
                                                Acceptor -> True
                                                _ -> False
 
-getStartCodonSites :: Transcript  -> [Site]
-getStartCodonSites tx = case (strand tx) == "+" of
-                       True -> filter isSite (map (\ cds -> cstart cds)  (txcds tx))
-                       False -> filter isSite (map (\ cds -> cend cds)  (txcds tx))
+getStartCodonSites :: Integer -> Transcript  -> [Site]
+getStartCodonSites phase' tx = case (strand tx) == "+" of
+                       True -> filter isSite (map (\ cds -> cstart cds)  (getCDSWithStartPhase  phase' tx))
+                       False -> filter isSite (map (\ cds -> cend cds)  (getCDSWithStartPhase  phase' tx))
                      where isSite site =  case stype site of
                                                StartCodon -> True
                                                _ -> False
 
-getDonorSites :: Transcript  -> [Site]
-getDonorSites tx = case (strand tx) == "+" of
-                       True -> filter isSite (map (\ cds -> cend cds)  (txcds tx))
-                       False -> filter isSite (map (\ cds -> cstart cds)  (txcds tx))
+getDonorSites :: Integer -> Transcript  -> [Site]
+getDonorSites phase' tx = case (strand tx) == "+" of
+                       True -> filter isSite (map (\ cds -> cend cds)  (getCDSWithEndPhase  phase' tx))
+                       False -> filter isSite (map (\ cds -> cstart cds)  (getCDSWithEndPhase  phase' tx))
                      where isSite site =  case stype site of
                                                Donor -> True
                                                _ -> False
 
-getStopCodonSites :: Transcript  -> [Site]
-getStopCodonSites tx = case (strand tx) == "+" of
-                       True -> filter isSite (map (\ cds -> cend cds)  (txcds tx))
-                       False -> filter isSite (map (\ cds -> cstart cds)  (txcds tx))
+getStopCodonSites :: Integer -> Transcript  -> [Site]
+getStopCodonSites phase' tx = case (strand tx) == "+" of
+                       True -> filter isSite (map (\ cds -> cend cds)  (getCDSWithEndPhase  phase' tx))
+                       False -> filter isSite (map (\ cds -> cstart cds)  (getCDSWithEndPhase  phase' tx))
                      where isSite site =  case stype site of
                                                StopCodon -> True
                                                _ -> False
@@ -119,12 +125,12 @@ getIntrons :: Transcript -> [(Integer, Integer)]
 getIntrons tx = case (strand tx ) == "+" of
                  True -> getIntronForward tx
                  False -> getIntronReverse tx
-               where getIntronForward tx = zip  (map (addPosition 1)  $ getDonorSites tx) (map (addPosition (-1)) $ getAcceptorSites tx)
-                     getIntronReverse tx = zip  (map (addPosition 1)  $ getAcceptorSites tx) (map (addPosition (-1)) $ getDonorSites tx)
+               where getIntronForward tx = zip  (map (addPosition 1)  $ getDonorSites (-1) tx) (map (addPosition (-1)) $ getAcceptorSites (-1) tx)
+                     getIntronReverse tx = zip  (map (addPosition 1)  $ getAcceptorSites (-1) tx) (map (addPosition (-1)) $ getDonorSites (-1) tx)
                      addPosition n site  = ((position site) +n)
 
-getExons :: Transcript -> [(Integer, Integer)]
-getExons tx = map (\ cds -> ((position $ cstart cds), (position $ cend cds))) (txcds tx)
+getExons :: Integer->Transcript -> [(Integer, Integer)]
+getExons phase' tx = map (\ cds -> ((position $ cstart cds), (position $ cend cds))) (getCDSWithStartPhase phase' tx)
 
 getGenePosition :: Gene -> (Integer, Integer)
 getGenePosition g = (minimum positions, maximum positions)

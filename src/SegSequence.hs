@@ -11,8 +11,8 @@ data Settings = Settings  { gtf :: String,
                             fasta :: String,
                             feature ::String,
                             length' :: Integer,
-                            offset :: Integer }
-
+                            offset :: Integer,
+                            phase' :: Integer}
 
 data Flag = Version
           | GTF String
@@ -21,6 +21,7 @@ data Flag = Version
           | Feature String
           | Length String
           | Offset String
+          | Phase String
           deriving Show
 
 options :: [OptDescr Flag]
@@ -29,11 +30,13 @@ options =
   ,  Option ['f'] ["fasta"] (ReqArg FASTA "FILE") "fasta file name"
   ,  Option ['x'] ["feature"] (ReqArg Feature "STRING") "the feature to extract"
   ,  Option ['l'] ["length"] (OptArg lengthp "Int") "length of the window"
-  ,  Option ['o'] ["offset"] (OptArg offsetp "Int") "offset of the window" ]
+  ,  Option ['o'] ["offset"] (OptArg offsetp "Int") "offset of the window"
+  ,  Option ['p'] ["phase"] (OptArg phasep "Int") "get features in a specific phase" ]
 
 lengthp,offsetp :: Maybe String -> Flag
 lengthp = Length . fromMaybe "9"
 offsetp = Offset . fromMaybe "3"
+phasep = Phase . fromMaybe "-1"
 
 compilerOpts :: [String] -> IO ([Flag],[String])
 compilerOpts argv =
@@ -45,45 +48,48 @@ compilerOpts argv =
                                 False-> ioError(userError (concat errs ++ usageInfo header options))
   where header = "Usage: segseq -g <gtf file> -f <fasta file> -x [initial|internal|final|all-exons|intron|sites]"
 
-
-
-createIndexFromFasta :: String  -> IO()
-createIndexFromFasta s = do
-                            io <- system  $ " cdbfasta " ++ s ++ " 2> cdbfasta.err 1> cdbfasta.out "
-                            return ()
-
-
-
 buildSettings :: Settings -> ([Flag],[String]) -> Settings
-buildSettings settings (opts,n)  =  foldr nextOption defaults opts
-       where nextOption option settings = case option of
-                                                 GTF x -> Settings x
+buildSettings settings (opts,n)  =  fst (foldl nextOption (defaults,0) opts)
+       where nextOption (settings,count)  option  =
+                                         case option of
+                                                 GTF x -> (Settings x
                                                                    (fasta settings)
                                                                    (feature settings)
                                                                    (length' settings)
                                                                    (offset settings)
-                                                 FASTA y -> Settings (gtf settings)
-                                                                     y
-                                                                     (feature settings)
-                                                                     (length' settings)
-                                                                     (offset settings)
-                                                 Length l -> Settings (gtf settings)
-                                                                      (fasta settings)
+                                                                   (phase' settings), count)
+                                                 FASTA y -> (Settings (gtf settings)
+                                                                      y
                                                                       (feature settings)
-                                                                      ((read (n!!0))  ::Integer)
+                                                                      (length' settings)
                                                                       (offset settings)
-                                                 Offset o -> Settings (gtf settings)
+                                                                      (phase' settings), count)
+                                                 Length l -> (Settings (gtf settings)
+                                                                       (fasta settings)
+                                                                       (feature settings)
+                                                                       ((read (n!!count))  ::Integer)
+                                                                       (offset settings)
+                                                                       (phase' settings), count + 1)
+                                                 Offset o -> (Settings (gtf settings)
+                                                                       (fasta settings)
+                                                                       (feature settings)
+                                                                       (length' settings)
+                                                                       ((read  (n!!count)) :: Integer)
+                                                                       (phase' settings), count + 1)
+                                                 Feature f -> (Settings (gtf settings)
+                                                                        (fasta settings)
+                                                                        f
+                                                                        (length' settings)
+                                                                        (offset settings)
+                                                                        (phase' settings), count )
+                                                 Phase p -> (Settings (gtf settings)
                                                                       (fasta settings)
                                                                       (feature settings)
                                                                       (length' settings)
-                                                                      ((read  (n!!1)) :: Integer)
-                                                 Feature f -> Settings (gtf settings)
-                                                                       (fasta settings)
-                                                                       f
-                                                                       (length' settings)
-                                                                       (offset settings)
+                                                                      (offset settings)
+                                                                      ((read (n!!count)) :: Integer), count + 1)
 
-             defaults = (Settings "" "" ""  9 3)
+             defaults = Settings "" "" ""  9 3 (-1)
 
 
 
@@ -173,7 +179,7 @@ extractSingleExons s a = extractFeature s a fromGenes (\ x -> genes x)
 extractFinalExons :: Settings -> [Annotation] -> ([String], [String])
 extractFinalExons s a = extractFeature s a fromGenes (\ x -> genes x)
                  where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
-                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> (getCDSWithStartPhase (phase' s) x) )
                        fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
                        fromCDS s p (c:_)= case (stype (cstart c)) of
                                              Acceptor -> case (stype (cend c)) of
@@ -194,7 +200,7 @@ extractFinalExons s a = extractFeature s a fromGenes (\ x -> genes x)
 extractInternalExons :: Settings -> [Annotation] -> ([String], [String])
 extractInternalExons s a = extractFeature s a fromGenes (\ x -> genes x)
                  where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
-                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> (getCDSWithStartPhase (phase' s) x))
                        fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
                        fromCDS s p (c:_)= case (stype (cstart c)) of
                                              Acceptor -> case (stype (cend c)) of
@@ -215,7 +221,7 @@ extractInternalExons s a = extractFeature s a fromGenes (\ x -> genes x)
 extractInitialExons :: Settings -> [Annotation] -> ([String], [String])
 extractInitialExons s a = extractFeature s a fromGenes (\ x -> genes x)
                  where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
-                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> (getCDSWithEndPhase (phase' s) x))
                        fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
                        fromCDS s p (c:_)= case (stype (cstart c)) of
                                              StartCodon -> forward
@@ -256,7 +262,7 @@ extractCDS s a = extractFeature s a fromGenes (\ x -> genes x)
 extractExons :: Settings -> [Annotation] -> ([String], [String])
 extractExons s a = extractFeature s a fromGenes (\ x -> genes x)
                    where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
-                         fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                         fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> (getCDSWithStartPhase (phase' s) x))
                          fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
                          fromCDS s p (c:_)= case (stype (cstart c)) of
                                              StartCodon -> forward
@@ -273,8 +279,9 @@ extractExons s a = extractFeature s a fromGenes (\ x -> genes x)
 extractSites :: Settings -> [Annotation] -> ([String], [String])
 extractSites s a = extractFeature s a fromGenes (\ annot -> genes annot)
                     where fromGenes s p g = extractFeature s g fromTranscripts ( \ gene -> transcripts gene )
-                          fromTranscripts s p t = extractFeature s t fromSiteList ( \ txs -> (getSites (siteName s) txs) )
+                          fromTranscripts s p t = extractFeature s t fromSiteList ( \ txs -> (getSites (phase' s) (siteName s) txs) )
                           fromSiteList s p sites = getSiteString s p sites
+
 
 getSiteString ::  Settings -> Transcript -> [Site] -> ([String], [String])
 getSiteString s t [] =  ([],[] )
