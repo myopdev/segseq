@@ -105,6 +105,7 @@ extractContent s a | feature s == "initial" = extractInitialExons s a
                    | feature s == "intergenic" = extractIntergenic s a
                    | feature s == "single" = extractSingleExons s a
                    | feature s == "cds" = extractCDS s a
+                   | feature s == "noncoding" = extractNonCoding s a
                    | otherwise = extractExons s a
 
 
@@ -112,6 +113,12 @@ extractContent s a | feature s == "initial" = extractInitialExons s a
 extractIntergenic :: Settings -> [Annotation] -> ([String], [String])
 extractIntergenic s a = (concat $ map (\ annot -> printIntergenic annot) a, [])
                   where printIntergenic annot = map (\ positions -> printSequence s name (fst positions) (snd positions) ) (getIntergenicRegions annot)
+                          where name = seqname (seqentry annot)
+
+
+extractNonCoding :: Settings -> [Annotation] -> ([String], [String])
+extractNonCoding s a = (concat $ map (\ annot -> printIntergenic annot) a, [])
+                  where printIntergenic annot = map (\ positions -> printSequence s name (fst positions) (snd positions) ) (getNonCodingRegions annot)
                           where name = seqname (seqentry annot)
 
 

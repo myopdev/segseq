@@ -136,6 +136,8 @@ getGenePosition :: Gene -> (Integer, Integer)
 getGenePosition g = (minimum positions, maximum positions)
            where positions = concat $ map (\ cds -> [(position $ cstart cds), (position $cend cds)] ) ( concat $ map (\ tx -> txcds tx) (transcripts g))
 
+
+
 disjointIntervals :: [(Integer, Integer)] -> [(Integer, Integer)]
 disjointIntervals intervals = joinIntervals (sort intervals)
                   where joinIntervals [] = []
@@ -159,4 +161,7 @@ complementIntervals intervals = complement ((0,0):intervals)
 getIntergenicRegions :: Annotation -> [(Integer, Integer)]
 getIntergenicRegions a = complementIntervals $ disjointIntervals  (map (\ gene -> getGenePosition gene ) (genes a))
 
+
+getNonCodingRegions :: Annotation -> [(Integer, Integer)]
+getNonCodingRegions a = complementIntervals $ disjointIntervals  $ concat $ map (\ gene -> (concat $ map (getExons (-1))  (transcripts  gene) )) (genes a)
 
