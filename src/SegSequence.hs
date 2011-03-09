@@ -306,7 +306,9 @@ siteName s | feature s == "start" = StartCodon
 
 
 printSequence :: Settings -> Name -> Integer -> Integer -> String
-printSequence set n s e = case (((size' set) > 0) && ((e -s + 1) <= (size' set))) of
-                               True -> n ++ " " ++ " " ++ show (s) ++ " " ++ show e ++ "\n"
-                               False -> ""
+printSequence set n s e = case ((size' set) > 0) of
+                               True -> case  ((e -s + 1) <= (size' set)) of
+                                             True -> n ++ " " ++ " " ++ show (s) ++ " " ++ show e ++ "\n"
+                                             False -> ""
+                               False -> n ++ " " ++ " " ++ show (s) ++ " " ++ show e ++ "\n"
 
