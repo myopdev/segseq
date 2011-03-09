@@ -12,7 +12,8 @@ data Settings = Settings  { gtf :: String,
                             feature ::String,
                             length' :: Integer,
                             offset :: Integer,
-                            phase' :: Integer}
+                            phase' :: Integer,
+                            size' :: Integer}
 
 data Flag = Version
           | GTF String
@@ -22,6 +23,7 @@ data Flag = Version
           | Length String
           | Offset String
           | Phase String
+          | Size String
           deriving Show
 
 options :: [OptDescr Flag]
@@ -31,12 +33,14 @@ options =
   ,  Option ['x'] ["feature"] (ReqArg Feature "STRING") "the feature to extract"
   ,  Option ['l'] ["length"] (OptArg lengthp "Int") "length of the window"
   ,  Option ['o'] ["offset"] (OptArg offsetp "Int") "offset of the window"
-  ,  Option ['p'] ["phase"] (OptArg phasep "Int") "get features in a specific phase" ]
+  ,  Option ['p'] ["phase"] (OptArg phasep "Int") "get features in a specific phase"
+  ,  Option ['s'] ["size"] (OptArg sizep "Int") "get features with size at most s"]
 
 lengthp,offsetp :: Maybe String -> Flag
 lengthp = Length . fromMaybe "9"
 offsetp = Offset . fromMaybe "3"
 phasep = Phase . fromMaybe "-1"
+sizep = Size . fromMaybe "-1"
 
 compilerOpts :: [String] -> IO ([Flag],[String])
 compilerOpts argv =
@@ -46,51 +50,20 @@ compilerOpts argv =
                      False -> case (length errs == 0) of
                                 True -> return (o,n)
                                 False-> ioError(userError (concat errs ++ usageInfo header options))
-  where header = "Usage: segseq -g <gtf file> -f <fasta file> -x [initial|internal|final|all-exons|intron|sites]"
+  where header = "Usage: segseq -g <gtf file> -f <fasta file> -x [initial|internal|final|all-exons|intron|sites] [-l <length of the window>] [-o <offset>] [-s <size>]"
 
 buildSettings :: Settings -> ([Flag],[String]) -> Settings
 buildSettings settings (opts,n)  =  fst (foldl nextOption (defaults,0) opts)
-       where nextOption (settings,count)  option  =
+       where nextOption (Settings g fa fe le o p s,count)  option  =
                                          case option of
-                                                 GTF x -> (Settings x
-                                                                   (fasta settings)
-                                                                   (feature settings)
-                                                                   (length' settings)
-                                                                   (offset settings)
-                                                                   (phase' settings), count)
-                                                 FASTA y -> (Settings (gtf settings)
-                                                                      y
-                                                                      (feature settings)
-                                                                      (length' settings)
-                                                                      (offset settings)
-                                                                      (phase' settings), count)
-                                                 Length l -> (Settings (gtf settings)
-                                                                       (fasta settings)
-                                                                       (feature settings)
-                                                                       ((read (n!!count))  ::Integer)
-                                                                       (offset settings)
-                                                                       (phase' settings), count + 1)
-                                                 Offset o -> (Settings (gtf settings)
-                                                                       (fasta settings)
-                                                                       (feature settings)
-                                                                       (length' settings)
-                                                                       ((read  (n!!count)) :: Integer)
-                                                                       (phase' settings), count + 1)
-                                                 Feature f -> (Settings (gtf settings)
-                                                                        (fasta settings)
-                                                                        f
-                                                                        (length' settings)
-                                                                        (offset settings)
-                                                                        (phase' settings), count )
-                                                 Phase p -> (Settings (gtf settings)
-                                                                      (fasta settings)
-                                                                      (feature settings)
-                                                                      (length' settings)
-                                                                      (offset settings)
-                                                                      ((read (n!!count)) :: Integer), count + 1)
-
-             defaults = Settings "" "" ""  9 3 (-1)
-
+                                                 GTF x -> (Settings x fa fe le o p s, count)
+                                                 FASTA x -> (Settings g x fe le o p s, count)
+                                                 Feature x ->(Settings g fa x le o p s, count)
+                                                 Length x ->  (Settings g fa fe ((read (n!!count))  ::Integer) o p s, count + 1)
+                                                 Offset x ->(Settings g fa fe le ((read (n!!count))  ::Integer) p s, count + 1)
+                                                 Phase x -> (Settings g fa fe le o ((read (n!!count))  ::Integer) s, count + 1)
+                                                 Size x -> (Settings g fa fe le o p ((read (n!!count))  ::Integer), count + 1)
+             defaults = Settings "" "" ""  9 3 (-1) (-1)
 
 
 
@@ -138,7 +111,7 @@ extractContent s a | feature s == "initial" = extractInitialExons s a
 
 extractIntergenic :: Settings -> [Annotation] -> ([String], [String])
 extractIntergenic s a = (concat $ map (\ annot -> printIntergenic annot) a, [])
-                  where printIntergenic annot = map (\ positions -> printSequence name (fst positions) (snd positions) ) (getIntergenicRegions annot)
+                  where printIntergenic annot = map (\ positions -> printSequence s name (fst positions) (snd positions) ) (getIntergenicRegions annot)
                           where name = seqname (seqentry annot)
 
 
@@ -150,7 +123,7 @@ extractIntrons s a = extractFeature s a fromGenes (\ annot -> genes annot)
                           fromIntrons s p introns = case (strand p == "+") of
                                                        True ->  (seqstr, [])
                                                        False -> ([],seqstr)
-                                                    where seqstr = map ( \ i -> printSequence seqname (fst i) (snd i) ) introns
+                                                    where seqstr = map ( \ i -> printSequence s seqname (fst i) (snd i) ) introns
                                                           seqname = parentseq (cstart ((txcds p) !! 0))
 
 
@@ -170,7 +143,7 @@ extractSingleExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              _ -> ([],[])
                                              where forward = ([seqstr],[])
                                                    reverse = ([], [seqstr])
-                                                   seqstr = printSequence (parentseq (cstart c))
+                                                   seqstr = printSequence s (parentseq (cstart c))
                                                                           (position (cstart c))
                                                                           (position (cend c))
 
@@ -191,7 +164,7 @@ extractFinalExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              _ -> ([],[])
                                              where forward = ([seqstr],[])
                                                    reverse = ([], [seqstr])
-                                                   seqstr = printSequence (parentseq (cstart c))
+                                                   seqstr = printSequence s (parentseq (cstart c))
                                                                           (position (cstart c))
                                                                           (position (cend c))
 
@@ -212,7 +185,7 @@ extractInternalExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              _ -> ([],[])
                                              where forward = ([seqstr],[])
                                                    reverse = ([], [seqstr])
-                                                   seqstr = printSequence (parentseq (cstart c))
+                                                   seqstr = printSequence s (parentseq (cstart c))
                                                                           (position (cstart c))
                                                                           (position (cend c))
 
@@ -231,7 +204,7 @@ extractInitialExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              _ -> ([],[])
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstr])
-                                                  seqstr = printSequence (parentseq (cstart c))
+                                                  seqstr = printSequence  s (parentseq (cstart c))
                                                                          (position (cstart c))
                                                                          (position (cend c))
 
@@ -271,7 +244,7 @@ extractExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              StopCodon -> reverse
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstr])
-                                                  seqstr = printSequence (parentseq (cstart c))
+                                                  seqstr = printSequence s  (parentseq (cstart c))
                                                                          (position (cstart c))
                                                                          (position (cend c))
 
@@ -293,33 +266,33 @@ singleSiteToStr :: Settings -> Transcript -> Site -> ([String], [String])
 singleSiteToStr s t site =
          case stype site of
             StartCodon ->case (strand t == "+") of
-                               True -> ([printSequence  (parentseq site)
+                               True -> ([printSequence  s (parentseq site)
                                                         ((position site) - (offset s))
                                                         ((position site) - (offset s) + (length' s) - 1)],[])
-                               False -> ([],[printSequence (parentseq site)
+                               False -> ([],[printSequence s (parentseq site)
                                                            ((position site) + (offset s) - (length' s) + 1)
                                                            ((position site) + (offset s))])
             Donor -> case (strand t == "+") of
-                       True -> ([printSequence (parentseq site)
+                       True -> ([printSequence s (parentseq site)
                                              ((position site) - (offset s) + 1)
                                              ((position site) - (offset s) + (length' s) )] ,[])
-                       False -> ([], [printSequence (parentseq site)
+                       False -> ([], [printSequence s (parentseq site)
                                                     ((position site) + (offset s) - (length' s) )
                                               ((position site) + (offset s) - 1)])
 
             Acceptor ->  case (strand t == "+") of
-                               True -> ([printSequence (parentseq site)
+                               True -> ([printSequence s (parentseq site)
                                                        ((position site) - (offset s) - 2)
                                                        ((position site) - (offset s) + (length' s) - 3)],[])
-                               False -> ([], [printSequence (parentseq site)
+                               False -> ([], [printSequence s  (parentseq site)
                                                             ((position site) + (offset s) - (length' s) + 3)
                                                              ((position site) + (offset s) + 2) ])
 
             StopCodon -> case (strand t == "+") of
-                               True -> ([printSequence (parentseq site)
+                               True -> ([printSequence s (parentseq site)
                                                        ((position site) - (offset s) + 1)
                                                        ((position site) - (offset s) + (length' s) )], [])
-                               False -> ([], [printSequence (parentseq site)
+                               False -> ([], [printSequence s (parentseq site)
                                                             ((position site) + (offset s) - (length' s) )
                                                             ((position site) + (offset s) - 1)])
 
@@ -332,6 +305,8 @@ siteName s | feature s == "start" = StartCodon
 
 
 
-printSequence :: Name -> Integer -> Integer -> String
-printSequence n s e = n ++ " " ++ " " ++ show (s) ++ " " ++ show e ++ "\n"
+printSequence :: Settings -> Name -> Integer -> Integer -> String
+printSequence set n s e = case (((size' set) > 0) && ((e -s + 1) <= (size' set))) of
+                               True -> n ++ " " ++ " " ++ show (s) ++ " " ++ show e ++ "\n"
+                               False -> ""
 
