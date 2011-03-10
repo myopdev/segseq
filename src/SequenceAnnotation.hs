@@ -74,7 +74,7 @@ getCDSWithStartPhase phase' tx  | phase' >= 0  =  filter (\ x -> (phase x == pha
                                 | otherwise = txcds tx
 
 getCDSWithEndPhase ::  Integer -> Transcript -> [CDS]
-getCDSWithEndPhase phase' tx | phase' >= 0  =  filter (\ x -> (((phase x) + (l x)) `mod` 3 == (phase' ))) (txcds tx)
+getCDSWithEndPhase phase' tx | phase' >= 0  =  filter (\ x -> (((phase x) + (l x) - 1) `mod` 3) == (phase' )  ) (txcds tx)
                              | otherwise = txcds tx
                             where l x= ((position $cend x) - (position $cstart x)+1)
 
