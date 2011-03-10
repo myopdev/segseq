@@ -165,6 +165,9 @@ extractFinalExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              Acceptor -> case (stype (cend c)) of
                                                            StopCodon -> forward
                                                            _ -> ([],[])
+                                             StartCodon -> case (stype (cend c)) of
+                                                           StopCodon -> forward
+                                                           _ -> ([],[])
                                              StopCodon -> case (stype (cend c)) of
                                                            Acceptor -> reverse
                                                            _ -> ([],[])
@@ -208,6 +211,10 @@ extractInitialExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              Donor -> case (stype (cend c)) of
                                                         StartCodon -> reverse
                                                         _ -> ([],[])
+                                             StopCodon -> case (stype (cend c)) of
+                                                            StartCodon -> reverse
+                                                            _ -> ([],[])
+
                                              _ -> ([],[])
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstr])
