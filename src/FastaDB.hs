@@ -166,11 +166,13 @@ indexFastaFile path outfile =
 updateIndex ::  FilePath  -> FilePath -> IO()
 updateIndex  absPath absPathFasta =
   do a <- openConnection  absPath
+     execStatement_ a "BEGIN;"
      execStatement_ a "create table if not exists StartPosition ( key string, value int64, primary key (key, value) )"
      execStatement_ a "create table if not exists Offset (key string, value int64, type bool,  primary key (key, value) )"
      (L.readFile absPathFasta) >>= findKeysFromContent a
      execStatement_ a "delete from StartPosition where key = \"\""
      execStatement_ a "delete from Offset where key = \"\""
+     execStatement_ a "END"
      closeConnection a
      return()
 

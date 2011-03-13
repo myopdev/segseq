@@ -37,8 +37,8 @@ revcomp seq = return (L.foldl complement L.empty (L.reverse seq))
                       | (x == (c2w 'c')) = c2w 'g' `L.cons` y
                       | (x == (c2w 'G')) = c2w 'C' `L.cons` y
                       | (x == (c2w 'g')) = c2w 'c' `L.cons` y
-                      | (x == (c2w 'T')) = c2w 'T' `L.cons` y
-                      | (x == (c2w 't')) = c2w 't' `L.cons` y
+                      | (x == (c2w 'T')) = c2w 'A' `L.cons` y
+                      | (x == (c2w 't')) = c2w 'a' `L.cons` y
                       | otherwise   =   x `L.cons` y
 
 printFeature :: Settings -> ([String],[String]) -> IO()
