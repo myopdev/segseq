@@ -22,7 +22,7 @@ import Data.List.Split
 
 main :: IO()
 main =  do
-           s <-  (getArgs >>= (return . compilerOpts) >>= (liftM (buildSettings (Settings "" "" "" 9 3 (-1) (-1)))))
+           s <-  (getArgs >>= (return . compilerOpts) >>= (liftM (buildSettings (Settings "" "" "" 9 3 (-1) (-1) (-1) (-1)))))
            gtfh <- openFile (gtf s) ReadMode
            indexFastaFile (fasta s) ((fasta s) ++ ".db")
            (B.hGetContents gtfh) >>= (return . createAnnotationList . readCSV . B.unpack) >>= (run s)
@@ -31,7 +31,7 @@ main =  do
 
 revcomp :: L.ByteString -> IO(L.ByteString)
 revcomp seq = return (L.foldl complement L.empty (seq))
- where complement y x            | (x == (c2w 'A')) = c2w 'T' `L.cons` y
+ where complement y x | (x == (c2w 'A')) = c2w 'T' `L.cons` y
                       | (x == (c2w 'a'))=  c2w 't' `L.cons` y
                       | (x == (c2w 'C'))=  c2w 'G' `L.cons` y
                       | (x == (c2w 'c')) = c2w 'g' `L.cons` y
@@ -41,14 +41,43 @@ revcomp seq = return (L.foldl complement L.empty (seq))
                       | (x == (c2w 't')) = c2w 'a' `L.cons` y
                       | otherwise   =   x `L.cons` y
 
+getComposition :: L.ByteString -> IO((Integer, Integer, Integer, Integer))
+getComposition seq = return (L.foldl sumComposition (0,0,0,0) (seq))
+ where sumComposition (a,c,g,t) x | (x == (c2w 'A')) = (a+1,c,g,t)
+                                  | (x == (c2w 'a'))=  (a+1,c,g,t)
+                                  | (x == (c2w 'C'))=  (a,c+1,g,t)
+                                  | (x == (c2w 'c')) = (a,c+1,g,t)
+                                  | (x == (c2w 'G')) = (a,c,g+1,t)
+                                  | (x == (c2w 'g')) = (a,c,g+1,t)
+                                  | (x == (c2w 'T')) = (a,c,g,t+1)
+                                  | (x == (c2w 't')) = (a,c,g,t+1)
+                                  | otherwise   =   (a,c,g,t)
+
+
+filterByGC :: Settings -> L.ByteString -> IO(L.ByteString)
+filterByGC s  bytes =
+  do if ( ((gc1 s) > 0) && ((gc2 s) > 0))
+        then do composition <- getComposition bytes
+                gc <- return( getGC composition)
+                if (((gc1 s) <= gc) && (gc <= (gc2 s)))
+                   then do return (bytes)
+                   else do return (L.empty)
+        else do return(bytes)
+  where getGC (a,c,g,t) = floor $ 100.0 * (fromInteger (g + c)/ fromInteger (a+c+g+t))
+
+
+
 printFeature :: Settings -> ([String],[String]) -> IO()
 printFeature s (f,r)  =
-  do forM f (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>= putSequence seq )
-     forM r (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  revcomp >>= putSequence seq )
+  do forM f (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>= filterByGC s >>= putSequence seq )
+     forM r (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  revcomp >>= filterByGC s >>= putSequence seq )
      return()
- where
+
+
+
+
 putSequence :: String -> L.ByteString -> IO()
-putSequence seq bytes =
+putSequence  seq bytes =
   do if (bytes /= L.empty)
         then do putStrLn $ ">" ++ head (splitOn " " seq)
                 L.putStrLn bytes

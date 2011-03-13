@@ -122,7 +122,6 @@ txParser = do string "transcript_id" >> spaces
               string ";" >> spaces
               return t
 
-testGTF = (renderGTF annot1 ++ renderGTF annot2)
 
 buildGeneNameList :: [[String]] -> [String]
 buildGeneNameList gtflines = nub $ map getGeneNameFromGTFLine  (delete [""] (nub gtflines))
@@ -166,7 +165,7 @@ createGene gtflines = Gene name transcripts
                                  transcripts = map createTranscript $ clusterGTFLinesByTranscript gtflines
 
 createTranscript :: [[String]] -> Transcript
-createTranscript gtflines = Transcript name strand cds
+createTranscript gtflines = Transcript name strand cds 0 0 0
                                        where name = getTranscriptNameFromGTFLine (gtflines !! 0)
                                              strand = (gtflines !! 0) !! 6
                                              cds = calculateCDSPhase (sortBy compareCDS ((createCDSList gtflines (createStartSite gtflines))  (createStopSite gtflines))) strand

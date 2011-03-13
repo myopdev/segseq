@@ -6,6 +6,7 @@ import Control.Monad
 import System.Directory(getTemporaryDirectory, removeFile)
 import System.IO
 import SequenceAnnotation
+import Data.List.Split
 
 data Settings = Settings  { gtf :: String,
                             fasta :: String,
@@ -13,7 +14,9 @@ data Settings = Settings  { gtf :: String,
                             length' :: Integer,
                             offset :: Integer,
                             phase' :: Integer,
-                            size' :: Integer}
+                            size' :: Integer,
+                            gc1 :: Integer,
+                            gc2 :: Integer  }
 
 data Flag = Version
           | GTF String
@@ -24,6 +27,7 @@ data Flag = Version
           | Offset String
           | Phase String
           | Size String
+          | GC String
           deriving Show
 
 options :: [OptDescr Flag]
@@ -34,13 +38,15 @@ options =
   ,  Option ['l'] ["length"] (OptArg lengthp "Int") "length of the window"
   ,  Option ['o'] ["offset"] (OptArg offsetp "Int") "offset of the window"
   ,  Option ['p'] ["phase"] (OptArg phasep "Int") "get features in a specific phase"
-  ,  Option ['s'] ["size"] (OptArg sizep "Int") "get features with size at most s"]
+  ,  Option ['s'] ["size"] (OptArg sizep "Int") "get features with size at most s"
+  ,  Option ['c'] ["gc content"] (OptArg gcp "STRING") "filter by gc" ]
 
-lengthp,offsetp :: Maybe String -> Flag
+lengthp,offsetp,gcp :: Maybe String -> Flag
 lengthp = Length . fromMaybe "9"
 offsetp = Offset . fromMaybe "3"
 phasep = Phase . fromMaybe "-1"
 sizep = Size . fromMaybe "-1"
+gcp = GC . fromMaybe "-1:-1"
 
 compilerOpts :: [String] -> IO ([Flag],[String])
 compilerOpts argv =
@@ -54,17 +60,19 @@ compilerOpts argv =
 
 buildSettings :: Settings -> ([Flag],[String]) -> Settings
 buildSettings settings (opts,n)  =  fst (foldl nextOption (defaults,0) opts)
-       where nextOption (Settings g fa fe le o p s,count)  option  =
+       where nextOption (Settings g fa fe le o p s g1 g2,count)  option  =
                                          case option of
-                                                 GTF x -> (Settings x fa fe le o p s, count)
-                                                 FASTA x -> (Settings g x fe le o p s, count)
-                                                 Feature x ->(Settings g fa x le o p s, count)
-                                                 Length x ->  (Settings g fa fe ((read (n!!count))  ::Integer) o p s, count + 1)
-                                                 Offset x ->(Settings g fa fe le ((read (n!!count))  ::Integer) p s, count + 1)
-                                                 Phase x -> (Settings g fa fe le o ((read (n!!count))  ::Integer) s, count + 1)
-                                                 Size x -> (Settings g fa fe le o p ((read (n!!count))  ::Integer), count + 1)
-             defaults = Settings "" "" ""  9 3 (-1) (-1)
-
+                                                 GTF x -> (Settings x fa fe le o p s g1 g2 , count)
+                                                 FASTA x -> (Settings g x fe le o p s  g1 g2 , count)
+                                                 Feature x ->(Settings g fa x le o p s g1 g2 , count)
+                                                 Length x ->  (Settings g fa fe ((read (n!!count))  ::Integer) o p s g1 g2 , count + 1)
+                                                 Offset x ->(Settings g fa fe le ((read (n!!count))  ::Integer) p s  g1 g2 , count + 1)
+                                                 Phase x -> (Settings g fa fe le o ((read (n!!count))  ::Integer) s  g1 g2 , count + 1)
+                                                 Size x -> (Settings g fa fe le o p ((read (n!!count))  ::Integer)  g1 g2 , count + 1)
+                                                 GC x -> (Settings g fa fe le o p s  (getg1 (n!!count)) (getg2 (n!!count)), count + 1)
+             defaults = Settings "" "" ""  9 3 (-1) (-1) (-1) (-1)
+             getg1 s = read (head (splitOn ":" s)) :: Integer
+             getg2 s = read (last (splitOn ":" s)) :: Integer
 
 
 extractFeature :: Settings -> [a] -> (Settings -> a -> [b] -> ([String],[String]) ) -> (a ->[b]) -> ([String], [String])
