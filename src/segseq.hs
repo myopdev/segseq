@@ -30,7 +30,7 @@ main =  do
            return ()
 
 revcomp :: L.ByteString -> IO(L.ByteString)
-revcomp seq = return (L.foldl complement L.empty (L.reverse seq))
+revcomp seq = return (L.foldl complement L.empty (seq))
  where complement y x            | (x == (c2w 'A')) = c2w 'T' `L.cons` y
                       | (x == (c2w 'a'))=  c2w 't' `L.cons` y
                       | (x == (c2w 'C'))=  c2w 'G' `L.cons` y
