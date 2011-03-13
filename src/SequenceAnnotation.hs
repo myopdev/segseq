@@ -122,6 +122,7 @@ disjointIntervals intervals = joinIntervals (sort intervals)
 complementIntervals :: [(Integer, Integer)] -> [(Integer, Integer)]
 complementIntervals intervals = complement ((0,0):intervals)
                                  where complement [] = []
+                                       complement [(a,b)] = []
                                        complement ([(a,b),(c,d)]) = case (b < c - 1) of
                                                                       True -> [(b+1, c-1), (d+1, d+1000)]
                                                                       False ->[(d+1, d+1000)]

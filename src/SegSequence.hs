@@ -16,7 +16,8 @@ data Settings = Settings  { gtf :: String,
                             phase' :: Integer,
                             size' :: Integer,
                             gc1 :: Integer,
-                            gc2 :: Integer  }
+                            gc2 :: Integer,
+                            genefilter :: Bool  }
 
 data Flag = Version
           | GTF String
@@ -60,19 +61,22 @@ compilerOpts argv =
 
 buildSettings :: Settings -> ([Flag],[String]) -> Settings
 buildSettings settings (opts,n)  =  fst (foldl nextOption (defaults,0) opts)
-       where nextOption (Settings g fa fe le o p s g1 g2,count)  option  =
+       where nextOption (Settings g fa fe le o p s g1 g2 f,count)  option  =
                                          case option of
-                                                 GTF x -> (Settings x fa fe le o p s g1 g2 , count)
-                                                 FASTA x -> (Settings g x fe le o p s  g1 g2 , count)
-                                                 Feature x ->(Settings g fa x le o p s g1 g2 , count)
-                                                 Length x ->  (Settings g fa fe ((read (n!!count))  ::Integer) o p s g1 g2 , count + 1)
-                                                 Offset x ->(Settings g fa fe le ((read (n!!count))  ::Integer) p s  g1 g2 , count + 1)
-                                                 Phase x -> (Settings g fa fe le o ((read (n!!count))  ::Integer) s  g1 g2 , count + 1)
-                                                 Size x -> (Settings g fa fe le o p ((read (n!!count))  ::Integer)  g1 g2 , count + 1)
-                                                 GC x -> (Settings g fa fe le o p s  (getg1 (n!!count)) (getg2 (n!!count)), count + 1)
-             defaults = Settings "" "" ""  9 3 (-1) (-1) (-1) (-1)
-             getg1 s = read (head (splitOn ":" s)) :: Integer
-             getg2 s = read (last (splitOn ":" s)) :: Integer
+                                                 GTF x -> (Settings x fa fe le o p s g1 g2 f, count)
+                                                 FASTA x -> (Settings g x fe le o p s  g1 g2 f , count)
+                                                 Feature x ->(Settings g fa x le o p s g1 g2 f , count)
+                                                 Length x ->  (Settings g fa fe ((read (n!!count))  ::Integer) o p s g1 g2 f, count + 1)
+                                                 Offset x ->(Settings g fa fe le ((read (n!!count))  ::Integer) p s  g1 g2 f, count + 1)
+                                                 Phase x -> (Settings g fa fe le o ((read (n!!count))  ::Integer) s  g1 g2 f, count + 1)
+                                                 Size x -> (Settings g fa fe le o p ((read (n!!count))  ::Integer)  g1 g2 f, count + 1)
+                                                 GC x -> (Settings g fa fe le o p s  (getg1 (n!!count)) (getg2 (n!!count)) (getrestriction (n!!count)), count + 1)
+             defaults = Settings "" "" ""  9 3 (-1) (-1) (-1) (-1) False
+             getg1 s = read ((splitOn ":" s)!!0) :: Integer
+             getg2 s = read ((splitOn ":" s)!!1) :: Integer
+             getrestriction s = case (length (splitOn ":" s) >= 3) of
+                                   True -> ((splitOn ":" s) !!2) == "gene"
+                                   False -> False
 
 
 extractFeature :: Settings -> [a] -> (Settings -> a -> [b] -> ([String],[String]) ) -> (a ->[b]) -> ([String], [String])

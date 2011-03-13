@@ -22,10 +22,10 @@ import Data.List.Split
 
 main :: IO()
 main =  do
-           s <-  (getArgs >>= (return . compilerOpts) >>= (liftM (buildSettings (Settings "" "" "" 9 3 (-1) (-1) (-1) (-1)))))
+           s <-  (getArgs >>= (return . compilerOpts) >>= (liftM (buildSettings (Settings "" "" "" 9 3 (-1) (-1) (-1) (-1) (False)))))
            gtfh <- openFile (gtf s) ReadMode
            indexFastaFile (fasta s) ((fasta s) ++ ".db")
-           (B.hGetContents gtfh) >>= (return . createAnnotationList . readCSV . B.unpack) >>= (run s)
+           (B.hGetContents gtfh) >>= (return . createAnnotationList . readCSV . B.unpack) >>= (filterGeneByGC s) >>= (run s)
            hClose gtfh
            return ()
 
@@ -56,7 +56,7 @@ getComposition seq = return (L.foldl sumComposition (0,0,0,0) (seq))
 
 filterByGC :: Settings -> L.ByteString -> IO(L.ByteString)
 filterByGC s  bytes =
-  do if ( ((gc1 s) > 0) && ((gc2 s) > 0))
+  do if ( ((gc1 s) >= 0) && ((gc2 s) >= 0))
         then do composition <- getComposition bytes
                 gc <- return( getGC composition)
                 if (((gc1 s) <= gc) && (gc <= (gc2 s)))
@@ -69,8 +69,8 @@ filterByGC s  bytes =
 
 printFeature :: Settings -> ([String],[String]) -> IO()
 printFeature s (f,r)  =
-  do forM f (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>= filterByGC s >>= putSequence seq )
-     forM r (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  revcomp >>= filterByGC s >>= putSequence seq )
+  do forM f (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  filterByGC s >>= putSequence seq )
+     forM r (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  revcomp >>=  filterByGC s >>= putSequence seq )
      return()
 
 
@@ -90,3 +90,27 @@ run s a=   do
              features <- return(extractContent s a)
              printFeature s features
              return ();
+
+
+filterGeneByGC :: Settings -> [Annotation] -> IO([Annotation])
+filterGeneByGC s a =
+  do if(genefilter s)
+       then do foldM (buildNewAnnotationList s) [] a
+       else do return (a)
+ where buildNewAnnotationList s list (Annotation seqentry g source)  =
+        do filtered <- foldM (filterGenes s (seqname $ seqentry)) [] g
+           return (list ++ [Annotation seqentry filtered source])
+       filterGenes s name list g =
+        do positions <- return (getGenePosition g)
+           seqEntry <- return (printSequence s name (fst positions) (snd positions))
+           seq <- getSequence (fasta s) ((fasta s) ++ ".db") seqEntry >>= filterByGC s
+           if (seq  /= L.empty)
+              then do return([g] ++ list)
+              else do return(list)
+
+
+
+
+
+
+
