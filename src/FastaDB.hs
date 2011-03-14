@@ -75,7 +75,7 @@ getSequence' fasta dbfile key =
      seqdata <- lazySlurp fp (fromIntegral 0)  (fromIntegral len)
      hClose hdl
      closeConnection db
-     return(C.pack(seqdata))
+     return (seqdata)
 
 sumOffset :: SQLiteHandle -> String -> Int64 -> Int64 -> IO (Int64)
 sumOffset db key pos o =
@@ -116,7 +116,7 @@ getSubSequence' fasta dbfile key b e =
      seqdata <- lazySlurp fp 0 (fromIntegral len)
      hClose hdl
      closeConnection db
-     return(C.pack(seqdata))
+     return seqdata
   where fixLimitStart pos1 start  =
          do if (pos1 < start)
                then return (start)
@@ -129,17 +129,25 @@ getSubSequence' fasta dbfile key b e =
 
 
 
+buf_size = 4096 :: Int
 
-lazySlurp :: ForeignPtr Word8 -> Int64 -> Int64 -> IO String
+lazySlurp :: ForeignPtr Word8 -> Int -> Int -> IO L.ByteString
 lazySlurp fp ix len
-  | ix == len = return []
+  | fp `seq` False = undefined
+  | ix >= len = return L.empty
   | otherwise = do
-     c <- withForeignPtr fp $ \p -> peekElemOff p (fromIntegral ix)
-     cs <- unsafeInterleaveIO (lazySlurp fp (ix+1) len)
-     x <- return (w2c c)
-     if (isSpace (x))
-        then return (cs)
-        else do return (x:cs)
+      cs <- unsafeInterleaveIO (lazySlurp fp (ix + buf_size) len)
+      ws <- withForeignPtr fp $ \p -> loop (min (len-ix) buf_size - 1) 
+      	    		      ((p :: Ptr Word8) `plusPtr` ix) cs
+      return ws
+ where
+  loop :: Int -> Ptr Word8 -> L.ByteString -> IO L.ByteString
+  loop len p acc
+    | len `seq` p `seq` False = undefined
+    | len < 0 = return acc
+    | otherwise = do
+       w <- peekElemOff p len
+       loop (len-1) p (w `L.cons` acc)
 
 
 

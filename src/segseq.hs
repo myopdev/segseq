@@ -30,7 +30,7 @@ main =  do
            return ()
 
 revcomp :: L.ByteString -> IO(L.ByteString)
-revcomp seq = return (L.foldl complement L.empty (seq))
+revcomp seq = return (L.foldl' complement L.empty (seq))
  where complement y x | (x == (c2w 'A')) = c2w 'T' `L.cons` y
                       | (x == (c2w 'a'))=  c2w 't' `L.cons` y
                       | (x == (c2w 'C'))=  c2w 'G' `L.cons` y
@@ -41,17 +41,19 @@ revcomp seq = return (L.foldl complement L.empty (seq))
                       | (x == (c2w 't')) = c2w 'a' `L.cons` y
                       | otherwise   =   x `L.cons` y
 
-getComposition :: L.ByteString -> IO((Integer, Integer, Integer, Integer))
-getComposition seq = return (L.foldl sumComposition (0,0,0,0) (seq))
- where sumComposition (a,c,g,t) x | (x == (c2w 'A')) = (a+1,c,g,t)
-                                  | (x == (c2w 'a'))=  (a+1,c,g,t)
-                                  | (x == (c2w 'C'))=  (a,c+1,g,t)
-                                  | (x == (c2w 'c')) = (a,c+1,g,t)
-                                  | (x == (c2w 'G')) = (a,c,g+1,t)
-                                  | (x == (c2w 'g')) = (a,c,g+1,t)
-                                  | (x == (c2w 'T')) = (a,c,g,t+1)
-                                  | (x == (c2w 't')) = (a,c,g,t+1)
-                                  | otherwise   =   (a,c,g,t)
+data SeqComposition = SeqComposition !Int !Int !Int !Int
+
+getComposition :: L.ByteString -> IO(SeqComposition)
+getComposition seq = return $! (L.foldl' sumComposition (SeqComposition 0 0 0 0)  (seq))
+ where sumComposition (SeqComposition a c g t)  x | (x == (c2w 'A')) = SeqComposition (a+1) c g t
+                                                  | (x == (c2w 'a'))=  SeqComposition (a+1) c g t
+                                                  | (x == (c2w 'C'))=  SeqComposition a (c+1) g t
+                                                  | (x == (c2w 'c')) = SeqComposition a (c+1) g t
+                                                  | (x == (c2w 'G')) = SeqComposition a c (g+1) t
+                                                  | (x == (c2w 'g')) = SeqComposition a c (g+1) t
+                                                  | (x == (c2w 'T')) = SeqComposition a c g (t+1)
+                                                  | (x == (c2w 't')) = SeqComposition a c g (t+1)
+                                                  | otherwise   =   SeqComposition a c g t
 
 
 filterByGC :: Settings -> L.ByteString -> IO(L.ByteString)
@@ -63,7 +65,7 @@ filterByGC s  bytes =
                    then do return (bytes)
                    else do return (L.empty)
         else do return(bytes)
-  where getGC (a,c,g,t) = floor $ 100.0 * (fromInteger (g + c)/ fromInteger (a+c+g+t))
+  where getGC (SeqComposition a c g t) = floor $ 100.0 * (fromIntegral (g + c)/ fromIntegral (a+c+g+t))
 
 
 

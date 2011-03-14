@@ -35,7 +35,7 @@ while (<>) {
       my $end = $positions[$i+1];
       if ($start > $end || $start <= 0 || $end <= 0) {
         $invalid = 1;
-        next ;
+        last ;
       }
       if ($start > $length ) { $start = $length;}
       if ($end > $length ){
@@ -43,6 +43,9 @@ while (<>) {
       }
       $seq .= $db->seq("$seqname:$start,$end");
     }
+  if(!($seq =~/^(A|C|G|T)+$/)) {
+     $invalid = 1;
+  }
   if(!$invalid) {
     my $seqobj = Bio::PrimarySeq->new (-seq => $seq,
                                        -alphabet =>'dna',
