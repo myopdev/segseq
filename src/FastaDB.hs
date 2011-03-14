@@ -70,9 +70,11 @@ getSequence' fasta dbfile key =
      hdl <- openFile absPathFasta ReadMode
      hSeek hdl AbsoluteSeek (fromIntegral beginOfSequence)
      fsize <- hFileSize hdl
-     fp <- mallocForeignPtrBytes (fromIntegral (largest - small -1))
-     len <- withForeignPtr fp $ \buf -> hGetBuf hdl buf (fromIntegral (largest - small - 1))
-     seqdata <- lazySlurp fp (fromIntegral 0)  (fromIntegral len)
+     seqdata <- if ((largest - small - 1) > 0 ) 
+                    then do fp <- mallocForeignPtrBytes (fromIntegral (largest - small -1))
+                            len <- withForeignPtr fp $ \buf -> hGetBuf hdl buf (fromIntegral (largest - small - 1))
+                            lazySlurp fp (fromIntegral 0)  (fromIntegral len)
+                    else do return( L.empty)
      hClose hdl
      closeConnection db
      return (seqdata)
