@@ -17,7 +17,8 @@ data Settings = Settings  { gtf :: String,
                             size' :: Integer,
                             gc1 :: Integer,
                             gc2 :: Integer,
-                            genefilter :: Bool  }
+                            genefilter :: Bool,
+                            clean::Bool  }
 
 data Flag = Version
           | GTF String
@@ -29,6 +30,7 @@ data Flag = Version
           | Phase String
           | Size String
           | GC String
+          | Remove String
           deriving Show
 
 options :: [OptDescr Flag]
@@ -40,14 +42,16 @@ options =
   ,  Option ['o'] ["offset"] (OptArg offsetp "Int") "offset of the window"
   ,  Option ['p'] ["phase"] (OptArg phasep "Int") "get features in a specific phase"
   ,  Option ['s'] ["size"] (OptArg sizep "Int") "get features with size at most s"
-  ,  Option ['c'] ["gc content"] (OptArg gcp "STRING") "filter by gc" ]
+  ,  Option ['c'] ["gc content"] (OptArg gcp "STRING") "filter by gc"
+  ,  Option ['r'] ["remove invalids"] (OptArg qp "Bool") "remove sequences that contains strange nucleotides symbols " ]
 
-lengthp,offsetp,gcp :: Maybe String -> Flag
+lengthp,offsetp,gcp,qp :: Maybe String -> Flag
 lengthp = Length . fromMaybe "9"
 offsetp = Offset . fromMaybe "3"
 phasep = Phase . fromMaybe "-1"
 sizep = Size . fromMaybe "-1"
 gcp = GC . fromMaybe "-1:-1"
+qp = Remove . fromMaybe "-1"
 
 compilerOpts :: [String] -> IO ([Flag],[String])
 compilerOpts argv =
@@ -61,17 +65,18 @@ compilerOpts argv =
 
 buildSettings :: Settings -> ([Flag],[String]) -> Settings
 buildSettings settings (opts,n)  =  fst (foldl nextOption (defaults,0) opts)
-       where nextOption (Settings g fa fe le o p s g1 g2 f,count)  option  =
+       where nextOption (Settings g fa fe le o p s g1 g2 f q,count)  option  =
                                          case option of
-                                                 GTF x -> (Settings x fa fe le o p s g1 g2 f, count)
-                                                 FASTA x -> (Settings g x fe le o p s  g1 g2 f , count)
-                                                 Feature x ->(Settings g fa x le o p s g1 g2 f , count)
-                                                 Length x ->  (Settings g fa fe ((read (n!!count))  ::Integer) o p s g1 g2 f, count + 1)
-                                                 Offset x ->(Settings g fa fe le ((read (n!!count))  ::Integer) p s  g1 g2 f, count + 1)
-                                                 Phase x -> (Settings g fa fe le o ((read (n!!count))  ::Integer) s  g1 g2 f, count + 1)
-                                                 Size x -> (Settings g fa fe le o p ((read (n!!count))  ::Integer)  g1 g2 f, count + 1)
-                                                 GC x -> (Settings g fa fe le o p s  (getg1 (n!!count)) (getg2 (n!!count)) (getrestriction (n!!count)), count + 1)
-             defaults = Settings "" "" ""  9 3 (-1) (-1) (-1) (-1) False
+                                                 GTF x -> (Settings x fa fe le o p s g1 g2 f q, count)
+                                                 FASTA x -> (Settings g x fe le o p s  g1 g2 f q, count)
+                                                 Feature x ->(Settings g fa x le o p s g1 g2 f q, count)
+                                                 Length x ->  (Settings g fa fe ((read (n!!count))  ::Integer) o p s g1 g2 f q, count + 1)
+                                                 Offset x ->(Settings g fa fe le ((read (n!!count))  ::Integer) p s  g1 g2 f q, count + 1)
+                                                 Phase x -> (Settings g fa fe le o ((read (n!!count))  ::Integer) s  g1 g2 f q, count + 1)
+                                                 Size x -> (Settings g fa fe le o p ((read (n!!count))  ::Integer)  g1 g2 f q, count + 1)
+                                                 GC x -> (Settings g fa fe le o p s  (getg1 (n!!count)) (getg2 (n!!count)) (getrestriction (n!!count)) q, count + 1)
+                                                 Remove x ->((Settings g fa x le o p s g1 g2 f True), (count))
+             defaults = Settings "" "" ""  9 3 (-1) (-1) (-1) (-1) False False
              getg1 s = read ((splitOn ":" s)!!0) :: Integer
              getg2 s = read ((splitOn ":" s)!!1) :: Integer
              getrestriction s = case (length (splitOn ":" s) >= 3) of
@@ -119,6 +124,7 @@ extractContent s a | feature s == "initial" = extractInitialExons s a
                    | feature s == "cds" = extractCDS s a
                    | feature s == "noncoding" = extractNonCoding s a
                    | otherwise = extractExons s a
+
 
 
 

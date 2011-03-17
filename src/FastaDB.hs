@@ -70,7 +70,7 @@ getSequence' fasta dbfile key =
      hdl <- openFile absPathFasta ReadMode
      hSeek hdl AbsoluteSeek (fromIntegral beginOfSequence)
      fsize <- hFileSize hdl
-     seqdata <- if ((largest - small - 1) > 0 ) 
+     seqdata <- if ((largest - small - 1) > 0 )
                     then do fp <- mallocForeignPtrBytes (fromIntegral (largest - small -1))
                             len <- withForeignPtr fp $ \buf -> hGetBuf hdl buf (fromIntegral (largest - small - 1))
                             lazySlurp fp (fromIntegral 0)  (fromIntegral len)
@@ -139,8 +139,8 @@ lazySlurp fp ix len
   | ix >= len = return L.empty
   | otherwise = do
       cs <- unsafeInterleaveIO (lazySlurp fp (ix + buf_size) len)
-      ws <- withForeignPtr fp $ \p -> loop (min (len-ix) buf_size - 1) 
-      	    		      ((p :: Ptr Word8) `plusPtr` ix) cs
+      ws <- withForeignPtr fp $ \p -> loop (min (len-ix) buf_size - 1)
+                              ((p :: Ptr Word8) `plusPtr` ix) cs
       return ws
  where
   loop :: Int -> Ptr Word8 -> L.ByteString -> IO L.ByteString
@@ -149,7 +149,9 @@ lazySlurp fp ix len
     | len < 0 = return acc
     | otherwise = do
        w <- peekElemOff p len
-       loop (len-1) p (w `L.cons` acc)
+       case (isSpace (w2c w)) of
+          True ->   loop (len-1) p (acc)
+          False ->  loop (len-1) p (w `L.cons` acc)
 
 
 

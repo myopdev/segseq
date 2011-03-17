@@ -19,10 +19,11 @@ import Data.ByteString.Internal
 import Directory
 import FastaDB
 import Data.List.Split
+import Data.Char
 
 main :: IO()
 main =  do
-           s <-  (getArgs >>= (return . compilerOpts) >>= (liftM (buildSettings (Settings "" "" "" 9 3 (-1) (-1) (-1) (-1) (False)))))
+           s <-  (getArgs >>= (return . compilerOpts) >>= (liftM (buildSettings (Settings "" "" "" 9 3 (-1) (-1) (-1) (-1) (False) (False)))))
            gtfh <- openFile (gtf s) ReadMode
            indexFastaFile (fasta s) ((fasta s) ++ ".db")
            (B.hGetContents gtfh) >>= (return . createAnnotationList . readCSV . B.unpack) >>= (filterGeneByGC s) >>= (run s)
@@ -56,6 +57,25 @@ getComposition seq = return $! (L.foldl' sumComposition (SeqComposition 0 0 0 0)
                                                   | otherwise   =   SeqComposition a c g t
 
 
+
+filterByInvalidSymbols :: Settings -> L.ByteString -> IO(L.ByteString)
+filterByInvalidSymbols s  bytes =
+  do if ( clean s )
+        then do case (L.find invalid bytes) of
+                     Nothing -> return(bytes)
+                     Just n -> return(L.empty)
+        else do return (bytes);
+  where invalid w | ( w == (c2w 'A') ) = False
+                  | ( w == (c2w 'a') ) = False
+                  | ( w == (c2w 'C') ) = False
+                  | ( w == (c2w 'c') ) = False
+                  | ( w == (c2w 'G') ) = False
+                  | ( w == (c2w 'g') ) = False
+                  | ( w == (c2w 'T') ) = False
+                  | ( w == (c2w 't') ) = False
+                  | otherwise = True
+
+
 filterByGC :: Settings -> L.ByteString -> IO(L.ByteString)
 filterByGC s  bytes =
   do if ( ((gc1 s) >= 0) && ((gc2 s) >= 0))
@@ -65,14 +85,16 @@ filterByGC s  bytes =
                    then do return (bytes)
                    else do return (L.empty)
         else do return(bytes)
-  where getGC (SeqComposition a c g t) = floor $ 100.0 * (fromIntegral (g + c)/ fromIntegral (a+c+g+t))
+
+getGC :: SeqComposition -> Integer
+getGC (SeqComposition a c g t) = floor $ 100.0 * (fromIntegral (g + c)/ fromIntegral (a+c+g+t))
 
 
 
 printFeature :: Settings -> ([String],[String]) -> IO()
 printFeature s (f,r)  =
-  do forM f (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  filterByGC s >>= putSequence seq )
-     forM r (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  revcomp >>=  filterByGC s >>= putSequence seq )
+  do forM f (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  filterByGC s  >>= filterByInvalidSymbols s >>= putSequence seq )
+     forM r (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  revcomp >>=  filterByGC s >>= filterByInvalidSymbols s >>= putSequence seq )
      return()
 
 
@@ -88,10 +110,12 @@ putSequence  seq bytes =
 
 
 run :: Settings -> [Annotation] -> IO ()
-run s a=   do
-             features <- return(extractContent s a)
-             printFeature s features
-             return ();
+run s a=
+ do features <- return(extractContent s a)
+    printFeature s features
+    return ();
+
+
 
 
 filterGeneByGC :: Settings -> [Annotation] -> IO([Annotation])
