@@ -18,7 +18,8 @@ data Settings = Settings  { gtf :: String,
                             gc1 :: Integer,
                             gc2 :: Integer,
                             genefilter :: Bool,
-                            clean::Bool  }
+                            clean::Bool,
+                            alternative:: Bool  }
 
 data Flag = Version
           | GTF String
@@ -31,6 +32,7 @@ data Flag = Version
           | Size String
           | GC String
           | Remove String
+          | RemoveAlternative String
           deriving Show
 
 options :: [OptDescr Flag]
@@ -43,15 +45,18 @@ options =
   ,  Option ['p'] ["phase"] (OptArg phasep "Int") "get features in a specific phase"
   ,  Option ['s'] ["size"] (OptArg sizep "Int") "get features with size at most s"
   ,  Option ['c'] ["gc content"] (OptArg gcp "STRING") "filter by gc"
-  ,  Option ['r'] ["remove invalids"] (OptArg qp "Bool") "remove sequences that contains strange nucleotides symbols " ]
+  ,  Option ['r'] ["remove invalids"] (OptArg qp "Bool") "remove sequences that contain strange nucleotides symbols and exclude duplicates "
+  ,  Option ['a'] ["only one variant"] (OptArg alternativep "Bool") "get features from only one transcript variant per gene " ]
 
-lengthp,offsetp,gcp,qp :: Maybe String -> Flag
+lengthp,offsetp,gcp,qp,alternativep :: Maybe String -> Flag
 lengthp = Length . fromMaybe "9"
 offsetp = Offset . fromMaybe "3"
 phasep = Phase . fromMaybe "-1"
 sizep = Size . fromMaybe "-1"
 gcp = GC . fromMaybe "-1:-1"
 qp = Remove . fromMaybe "-1"
+alternativep = RemoveAlternative . fromMaybe "-1"
+
 
 compilerOpts :: [String] -> IO ([Flag],[String])
 compilerOpts argv =
@@ -65,18 +70,19 @@ compilerOpts argv =
 
 buildSettings :: Settings -> ([Flag],[String]) -> Settings
 buildSettings settings (opts,n)  =  fst (foldl nextOption (defaults,0) opts)
-       where nextOption (Settings g fa fe le o p s g1 g2 f q,count)  option  =
+       where nextOption (Settings g fa fe le o p s g1 g2 f q var,count)  option  =
                                          case option of
-                                                 GTF x -> (Settings x fa fe le o p s g1 g2 f q, count)
-                                                 FASTA x -> (Settings g x fe le o p s  g1 g2 f q, count)
-                                                 Feature x ->(Settings g fa x le o p s g1 g2 f q, count)
-                                                 Length x ->  (Settings g fa fe ((read (n!!count))  ::Integer) o p s g1 g2 f q, count + 1)
-                                                 Offset x ->(Settings g fa fe le ((read (n!!count))  ::Integer) p s  g1 g2 f q, count + 1)
-                                                 Phase x -> (Settings g fa fe le o ((read (n!!count))  ::Integer) s  g1 g2 f q, count + 1)
-                                                 Size x -> (Settings g fa fe le o p ((read (n!!count))  ::Integer)  g1 g2 f q, count + 1)
-                                                 GC x -> (Settings g fa fe le o p s  (getg1 (n!!count)) (getg2 (n!!count)) (getrestriction (n!!count)) q, count + 1)
-                                                 Remove x ->((Settings g fa x le o p s g1 g2 f True), (count))
-             defaults = Settings "" "" ""  9 3 (-1) (-1) (-1) (-1) False False
+                                                 GTF x -> (Settings x fa fe le o p s g1 g2 f q var, count)
+                                                 FASTA x -> (Settings g x fe le o p s  g1 g2 f q var, count)
+                                                 Feature x ->(Settings g fa x le o p s g1 g2 f q var, count)
+                                                 Length x ->  (Settings g fa fe ((read (n!!count))  ::Integer) o p s g1 g2 f q var, count + 1)
+                                                 Offset x ->(Settings g fa fe le ((read (n!!count))  ::Integer) p s  g1 g2 f q var, count + 1)
+                                                 Phase x -> (Settings g fa fe le o ((read (n!!count))  ::Integer) s  g1 g2 f q var, count + 1)
+                                                 Size x -> (Settings g fa fe le o p ((read (n!!count))  ::Integer)  g1 g2 f q var, count + 1)
+                                                 GC x -> (Settings g fa fe le o p s  (getg1 (n!!count)) (getg2 (n!!count)) (getrestriction (n!!count)) q var, count + 1)
+                                                 Remove x ->((Settings g fa fe le o p s g1 g2 f True var), (count))
+                                                 RemoveAlternative x ->((Settings g fa fe le o p s g1 g2 f q True), (count))
+             defaults = Settings "" "" ""  9 3 (-1) (-1) (-1) (-1) False False False
              getg1 s = read ((splitOn ":" s)!!0) :: Integer
              getg2 s = read ((splitOn ":" s)!!1) :: Integer
              getrestriction s = case (length (splitOn ":" s) >= 3) of
@@ -118,11 +124,12 @@ extractContent s a | feature s == "initial" = extractInitialExons s a
                    | feature s == "start" = extractSites s a
                    | feature s == "stop" = extractSites s a
                    | feature s == "intron" = extractIntrons s a
-                   | feature s == "all-exons" = extractExons s a
+                   | feature s == "exons" = extractExons s a
                    | feature s == "intergenic" = extractIntergenic s a
                    | feature s == "single" = extractSingleExons s a
                    | feature s == "cds" = extractCDS s a
                    | feature s == "noncoding" = extractNonCoding s a
+                   | feature s == "initial-pattern" = extractInitialPattern s a
                    | otherwise = extractExons s a
 
 
@@ -143,7 +150,7 @@ extractNonCoding s a = (concat $ map (\ annot -> printIntergenic annot) a, [])
 
 extractIntrons :: Settings -> [Annotation] -> ([String], [String])
 extractIntrons s a = extractFeature s a fromGenes (\ annot -> genes annot)
-                    where fromGenes s p g = extractFeature s g fromTranscripts ( \ gene -> transcripts gene )
+                    where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
                           fromTranscripts s p t = extractFeature s t fromIntrons ( \ txs -> (getIntrons txs) )
                           fromIntrons s p introns = case (strand p == "+") of
                                                        True ->  (seqstr, [])
@@ -153,9 +160,10 @@ extractIntrons s a = extractFeature s a fromGenes (\ annot -> genes annot)
 
 
 
+
 extractSingleExons :: Settings -> [Annotation] -> ([String], [String])
 extractSingleExons s a = extractFeature s a fromGenes (\ x -> genes x)
-                 where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                 where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
                        fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
                        fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
                        fromCDS s p (c:_)= case (stype (cstart c)) of
@@ -176,7 +184,7 @@ extractSingleExons s a = extractFeature s a fromGenes (\ x -> genes x)
 
 extractFinalExons :: Settings -> [Annotation] -> ([String], [String])
 extractFinalExons s a = extractFeature s a fromGenes (\ x -> genes x)
-                 where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                 where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
                        fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> (getCDSWithStartPhase (phase' s) x) )
                        fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
                        fromCDS s p (c:_)= case (stype (cstart c)) of
@@ -200,7 +208,7 @@ extractFinalExons s a = extractFeature s a fromGenes (\ x -> genes x)
 
 extractInternalExons :: Settings -> [Annotation] -> ([String], [String])
 extractInternalExons s a = extractFeature s a fromGenes (\ x -> genes x)
-                 where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                 where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
                        fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> (getCDSWithStartPhase (phase' s) x))
                        fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
                        fromCDS s p (c:_)= case (stype (cstart c)) of
@@ -221,7 +229,7 @@ extractInternalExons s a = extractFeature s a fromGenes (\ x -> genes x)
 
 extractInitialExons :: Settings -> [Annotation] -> ([String], [String])
 extractInitialExons s a = extractFeature s a fromGenes (\ x -> genes x)
-                 where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                 where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
                        fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> (getCDSWithEndPhase (phase' s) x))
                        fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
                        fromCDS s p (c:_)= case (stype (cstart c)) of
@@ -243,7 +251,7 @@ extractInitialExons s a = extractFeature s a fromGenes (\ x -> genes x)
 
 extractCDS :: Settings -> [Annotation] -> ([String], [String])
 extractCDS s a = extractFeature s a fromGenes (\ x -> genes x)
-                   where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                   where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
                          fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
                          fromCDSList s p c = ([case (length (fwd')>= 1 && (head fwd') /= "") of
                                                     True -> (parentseq (cstart (c!!0))) ++ " " ++ (head fwd')++"\n"
@@ -266,7 +274,7 @@ extractCDS s a = extractFeature s a fromGenes (\ x -> genes x)
 
 extractExons :: Settings -> [Annotation] -> ([String], [String])
 extractExons s a = extractFeature s a fromGenes (\ x -> genes x)
-                   where fromGenes s p g = extractFeature s g fromTranscripts ( \ x -> transcripts x )
+                   where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
                          fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> (getCDSWithStartPhase (phase' s) x))
                          fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
                          fromCDS s p (c:_)= case (stype (cstart c)) of
@@ -281,9 +289,28 @@ extractExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                                                          (position (cend c))
 
 
+extractInitialPattern :: Settings -> [Annotation] -> ([String], [String])
+extractInitialPattern s a = extractFeature s a fromGenes (\ x -> genes x)
+                   where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
+                         fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> (getCDSWithStartPhase (phase' s) x))
+                         fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
+                         fromCDS s p (c:_)= case (stype (cstart c)) of
+                                             StartCodon -> forward
+                                             Acceptor -> forward
+                                             Donor -> reverse
+                                             StopCodon -> reverse
+                                            where forward = ([seqstr],[])
+                                                  reverse = ([], [seqstrR])
+                                                  seqstr = printSequence s  (parentseq (cstart c))
+                                                                            (position (cstart c) + (offset s))
+                                                                            (position (cstart c) + (offset s) + (length' s) - 1)
+                                                  seqstrR = printSequence s (parentseq (cend c))
+                                                                            (position (cend c)  - (offset s))
+                                                                            (position (cend c) - (offset s) - (length' s) + 1)
+
 extractSites :: Settings -> [Annotation] -> ([String], [String])
 extractSites s a = extractFeature s a fromGenes (\ annot -> genes annot)
-                    where fromGenes s p g = extractFeature s g fromTranscripts ( \ gene -> transcripts gene )
+                    where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
                           fromTranscripts s p t = extractFeature s t fromSiteList ( \ txs -> (getSites (phase' s) (siteName s) txs) )
                           fromSiteList s p sites = getSiteString s p sites
 
@@ -344,3 +371,8 @@ printSequence set n s e = case ((size' set) > 0) of
                                              False -> ""
                                False -> n ++ " " ++ show (s) ++ " " ++ show e ++ "\n"
 
+
+filterTranscript :: Settings -> Gene -> [Transcript]
+filterTranscript s g = case (alternative s) of
+                         True -> [(transcripts g )!!0]
+                         False -> transcripts g

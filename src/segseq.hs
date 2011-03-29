@@ -13,17 +13,20 @@ import GTF
 import Data.Maybe
 import System.Directory(getTemporaryDirectory, removeFile)
 import Control.Concurrent
-import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Internal
 import Directory
 import FastaDB
 import Data.List.Split
 import Data.Char
+import Data.List
 
 main :: IO()
 main =  do
-           s <-  (getArgs >>= (return . compilerOpts) >>= (liftM (buildSettings (Settings "" "" "" 9 3 (-1) (-1) (-1) (-1) (False) (False)))))
+           s <-  (getArgs >>= (return . compilerOpts) >>= (liftM (buildSettings (Settings "" "" "" 9 3 (-1) (-1) (-1) (-1) (False) (False) (False)))))
+--           hPutStrLn stderr $ "r: " ++ (show $ clean s)
+--           hPutStrLn stderr $ "x: " ++ (feature s)
            gtfh <- openFile (gtf s) ReadMode
            indexFastaFile (fasta s) ((fasta s) ++ ".db")
            (B.hGetContents gtfh) >>= (return . createAnnotationList . readCSV . B.unpack) >>= (filterGeneByGC s) >>= (run s)
@@ -58,8 +61,8 @@ getComposition seq = return $! (L.foldl' sumComposition (SeqComposition 0 0 0 0)
 
 
 
-filterByInvalidSymbols :: Settings -> L.ByteString -> IO(L.ByteString)
-filterByInvalidSymbols s  bytes =
+cleanDataset :: Settings -> L.ByteString -> IO(L.ByteString)
+cleanDataset s  bytes =
   do if ( clean s )
         then do case (L.find invalid bytes) of
                      Nothing -> return(bytes)
@@ -93,9 +96,15 @@ getGC (SeqComposition a c g t) = floor $ 100.0 * (fromIntegral (g + c)/ fromInte
 
 printFeature :: Settings -> ([String],[String]) -> IO()
 printFeature s (f,r)  =
-  do forM f (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  filterByGC s  >>= filterByInvalidSymbols s >>= putSequence seq )
-     forM r (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  revcomp >>=  filterByGC s >>= filterByInvalidSymbols s >>= putSequence seq )
+  do forM cleanF (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  filterByGC s  >>= cleanDataset s >>= putSequence seq )
+     forM cleanR (\ seq -> getSequence (fasta s) ((fasta s) ++ ".db") seq >>=  revcomp >>=  filterByGC s >>= cleanDataset s >>= putSequence seq )
      return()
+ where cleanF = case (clean s) of
+                  True -> nub f
+                  False -> f
+       cleanR = case (clean s) of
+                  True -> nub r
+                  False -> r
 
 
 

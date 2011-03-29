@@ -2,7 +2,8 @@ module FastaDB (indexFastaFile, getSequence) where
 
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C
-import Database.SQLite
+import Database.HDBC
+import Database.HDBC.Sqlite3
 import Data.ByteString.Internal
 import Control.Monad
 import Data.Char
@@ -13,12 +14,9 @@ import System.Posix.Directory
 import System.Posix.User
 import System.Posix.Process
 import System.Directory
--- import System.Time
--- import System.Path
--- import System.Cmd.Utils
 import System.IO
 import System.IO.Unsafe
-import Data.List (isInfixOf, isPrefixOf)
+import Data.List (isInfixOf, isPrefixOf, foldl')
 import Data.List.Split
 import Foreign
 
@@ -62,7 +60,7 @@ getSequence' :: FilePath -> FilePath -> String -> IO(L.ByteString)
 getSequence' fasta dbfile key =
   do absPathFasta <- absDir(fasta)
      absPathDB <- absDir (dbfile)
-     db <- openConnection absPathDB
+     db <- connectSqlite3 absPathDB
      begin <- getInt db key $ getStartPositionFromDatabase
      small <- getInt db key $ getSmallestOffsetFromDatabase
      largest <- getInt db key $ getLargestOffsetFromDatabase
@@ -76,10 +74,10 @@ getSequence' fasta dbfile key =
                             lazySlurp fp (fromIntegral 0)  (fromIntegral len)
                     else do return( L.empty)
      hClose hdl
-     closeConnection db
+     disconnect db
      return (seqdata)
 
-sumOffset :: SQLiteHandle -> String -> Int64 -> Int64 -> IO (Int64)
+sumOffset :: Connection -> String -> Int64 -> Int64 -> IO (Int64)
 sumOffset db key pos o =
   do small <- getInt db key $ getSmallestOffsetFromDatabase
      x <- getInt db key $ getOffsetCountFromDatabase $fromIntegral (pos + small + o)
@@ -93,7 +91,7 @@ getSubSequence' :: FilePath -> FilePath -> String -> Int64 -> Int64 -> IO(L.Byte
 getSubSequence' fasta dbfile key b e =
   do absPathFasta <- absDir(fasta)
      absPathDB <- absDir (dbfile)
-     db <- openConnection absPathDB
+     db <- connectSqlite3 absPathDB
      begin <- getInt db key $ getStartPositionFromDatabase
      small <- getInt db key $ getSmallestOffsetFromDatabase
      largest <- getInt db key $ getLargestOffsetFromDatabase
@@ -113,11 +111,13 @@ getSubSequence' fasta dbfile key b e =
      hdl <- openFile absPathFasta ReadMode
      hSeek hdl AbsoluteSeek (fromIntegral subSeqBegin)
      fsize <- hFileSize hdl
-     fp <- mallocForeignPtrBytes (fromIntegral (subSeqEnd - subSeqBegin + 1))
-     len <- withForeignPtr fp $ \buf -> hGetBuf hdl buf (fromIntegral (subSeqEnd - subSeqBegin + 1))
-     seqdata <- lazySlurp fp 0 (fromIntegral len)
+     seqdata <- if ((subSeqEnd - subSeqBegin + 1) > 0)
+                   then do fp <- mallocForeignPtrBytes (fromIntegral (subSeqEnd - subSeqBegin + 1))
+                           len <- withForeignPtr fp $ \buf -> hGetBuf hdl buf (fromIntegral (subSeqEnd - subSeqBegin + 1))
+                           lazySlurp fp 0 (fromIntegral len)
+                   else do return(L.empty)
      hClose hdl
-     closeConnection db
+     disconnect db
      return seqdata
   where fixLimitStart pos1 start  =
          do if (pos1 < start)
@@ -177,102 +177,95 @@ indexFastaFile path outfile =
 
 updateIndex ::  FilePath  -> FilePath -> IO()
 updateIndex  absPath absPathFasta =
-  do a <- openConnection  absPath
-     execStatement_ a "BEGIN;"
-     execStatement_ a "create table if not exists StartPosition ( key string, value int64, primary key (key, value) )"
-     execStatement_ a "create table if not exists Offset (key string, value int64, type bool,  primary key (key, value) )"
-     (L.readFile absPathFasta) >>= findKeysFromContent a
-     execStatement_ a "delete from StartPosition where key = \"\""
-     execStatement_ a "delete from Offset where key = \"\""
-     execStatement_ a "END"
-     closeConnection a
+  do a <- connectSqlite3  absPath
+     run a "create table if not exists StartPosition ( key string, value int64, primary key (key, value) )" []
+     run a "create table if not exists Offset (key string, value int64, type bool,  primary key (key, value) )" []
+     commit a
+     withTransaction a insertIntoDatabase
+     run a "delete from StartPosition where key = \"\"" []
+     run a "delete from Offset where key = \"\"" []
+     commit a
+     disconnect a
      return()
+ where insertIntoDatabase a = ((L.readFile absPathFasta) >>= findKeysFromContent a)
 
-
-findKeysFromContent :: SQLiteHandle -> L.ByteString -> IO()
+findKeysFromContent :: Connection -> L.ByteString -> IO()
 findKeysFromContent  a content =
   do endLine <- return(L.pack([c2w '\n']))
      content <-return( L.append content endLine)
-     startOfSeq <- return (L.findIndices (\x -> ((c2w '>')  == x)) content)
-     seqEntries <- return(tail (L.split (c2w '>') content) )
+     startOfSeq <- return  (L.findIndices (\x -> ((c2w '>')  == x)) content)
+     seqEntries <- return  (tail (L.split (c2w '>') content) )
      newLines <- return (map ( L.findIndices (\x ->  ((x == c2w '\r') || (x == c2w '\n'))   )) seqEntries)
      spaces <- return (map ( L.findIndices (\x ->  ((x == c2w '\t') || (x == c2w ' '))   )) seqEntries)
-     seqNames <- return (map (L.takeWhile (\x -> (not ((x == c2w '\r') || (x == c2w '\n')))) ) seqEntries)
-     startPositionByName <- return (zip seqNames startOfSeq)
-     newLinesByName <- return (zip seqNames newLines)
-     spacesByName <- return (zip seqNames spaces)
+     seqNames <- return  (map (L.takeWhile (\x -> (not ((x == c2w ' ') || (x == c2w '\r') || (x == c2w '\n')))) ) seqEntries)
+     startPositionByName <- return $! (zip seqNames startOfSeq)
+     newLinesByName <- return  $! (zip seqNames newLines)
+     spacesByName <- return $! (zip seqNames spaces)
      forM startPositionByName (addKeyStartPosition a)
      forM newLinesByName (addKeysNewLineList a)
      forM spacesByName (addKeysSpaceList a)
      return ()
 
-addKeyStartPosition :: SQLiteHandle -> (L.ByteString, Int64)  -> IO()
+addKeyStartPosition :: Connection -> (L.ByteString, Int64)  -> IO()
 addKeyStartPosition a (name, pos) =
-  do execStatement_ a $ "INSERT INTO StartPosition (key, value) VALUES (\"" ++ C.unpack(name) ++ "\"," ++  (show pos) ++ ")"
+  do run a "INSERT INTO StartPosition (key, value) VALUES (?,?)" [toSql $ C.unpack (name), toSql pos]
      return ()
 
-addKeyNewLine :: SQLiteHandle -> (L.ByteString, Int64) -> IO()
+addKeyNewLine :: Connection -> (L.ByteString, Int64) -> IO()
 addKeyNewLine a (name, pos) =
-  do execStatement_ a $ "INSERT INTO Offset (key, value, type) VALUES (\"" ++ C.unpack(name) ++ "\"," ++  (show (pos+1)) ++ ", 1)"
+  do x <- return (pos + 1)
+     handleSqlError $ run a "INSERT INTO Offset (key, value, type) VALUES (?,?,?) " [toSql $ C.unpack (name), (toSql x), (toSql True)]
      return ()
 
-addKeySpace :: SQLiteHandle -> (L.ByteString, Int64) -> IO()
+addKeySpace :: Connection -> (L.ByteString, Int64) -> IO()
 addKeySpace a (name, pos) =
-  do execStatement_ a $ "INSERT INTO Offset (key, value, type) VALUES (\"" ++ C.unpack(name) ++ "\"," ++  (show (pos+1)) ++ ", 0)"
+  do run a "INSERT INTO Offset (key, value, type) VALUES (?,?,?)" [toSql $ C.unpack (name), toSql  (pos + 1), toSql False]
      return ()
 
 
-addKeysNewLineList ::SQLiteHandle -> (L.ByteString, [Int64]) -> IO()
+addKeysNewLineList ::Connection -> (L.ByteString, [Int64]) -> IO()
 addKeysNewLineList a (name, list) =
   do forM list (\ x -> addKeyNewLine a (name, x))
      return()
 
-addKeysSpaceList ::SQLiteHandle -> (L.ByteString, [Int64]) -> IO()
+addKeysSpaceList ::Connection -> (L.ByteString, [Int64]) -> IO()
 addKeysSpaceList a (name, list) =
   do forM list (\ x -> addKeySpace a (name, x))
      return()
 
 
 
-getKeys :: SQLiteHandle -> IO [String]
+getKeys :: Connection -> IO [String]
 getKeys db =
   do r <- getKeysFromDatabase db
-     case r of
-      Left a ->  return([])
-      Right a -> return (map (\tuple -> snd(tuple !! 0) ) (a !! 0))
+     return (map (\tuple -> fromSql (tuple!!0)::String ) r)
 
 
-getInt :: SQLiteHandle -> String -> (SQLiteHandle -> String -> IO (Either String [[Row Value]]) ) ->IO (Int64)
+getInt :: Connection -> String -> (Connection -> String -> IO ([[SqlValue]]) ) ->IO (Int64)
 getInt db key k =
   do x <- k db key
-     case x of
-       Left a -> return (-1)
-       Right a -> case (snd(a!!0!!0!!0)) of
-                   Int b -> return(b)
-                   Null -> return (-1)
+     return ((fromSql (x!!0!!0))::Int64)
 
 
-
-
-getKeysFromDatabase  :: SQLiteHandle -> IO (Either String [[Row String]])
+getKeysFromDatabase  :: Connection -> IO ([[SqlValue]])
 getKeysFromDatabase db =
-  do execStatement db "SELECT DISTINCT key FROM StartPosition"
+  do quickQuery' db ("SELECT DISTINCT key FROM StartPosition") []
 
-getStartPositionFromDatabase  :: SQLiteHandle -> String -> IO (Either String [[Row Value]])
+getStartPositionFromDatabase  :: Connection -> String -> IO ([[SqlValue]])
 getStartPositionFromDatabase db key =
-  do execStatement db $ "SELECT value FROM StartPosition where key =\"" ++ key ++ "\""
+  do quickQuery' db ("SELECT value FROM StartPosition where key = ?") [toSql key]
 
-getLargestOffsetFromDatabase  :: SQLiteHandle -> String -> IO (Either String [[Row Value]])
+getLargestOffsetFromDatabase  :: Connection -> String -> IO ([[SqlValue]])
 getLargestOffsetFromDatabase db key =
-  do execStatement db $ "SELECT max(value) FROM Offset where key =\"" ++ key ++ "\" and type=1"
+  do quickQuery' db ("SELECT max(value) FROM Offset where key =? and type= 'True'") [toSql key]
 
-getSmallestOffsetFromDatabase  :: SQLiteHandle -> String -> IO (Either String [[Row Value]])
+getSmallestOffsetFromDatabase  :: Connection -> String -> IO ([[SqlValue]])
 getSmallestOffsetFromDatabase db key =
-  do execStatement db $ "SELECT min(value) FROM Offset where key =\"" ++ key ++ "\" and type = 1"
+  do quickQuery' db ("SELECT min(value) FROM Offset where key = ? and type = 'True'") [toSql key]
 
-getOffsetCountFromDatabase  :: Int64 -> SQLiteHandle -> String  -> IO (Either String [[Row Value]])
+getOffsetCountFromDatabase  :: Int64 -> Connection -> String  -> IO ([[SqlValue]])
 getOffsetCountFromDatabase pos db key  =
-  do execStatement db $ "SELECT count(value) FROM Offset  where key =\"" ++ key ++ "\" and value <= " ++ (show (pos)) ++ " and value > (SELECT (min(value)) FROM Offset where key = \"" ++ key ++ "\" and type = 1)"
+  do quickQuery' db ("SELECT count(value) FROM Offset  where key = ?   and value <= ? and value > (SELECT (min(value)) FROM Offset where key = ? and type = 'True')") [toSql key, SqlInt64 pos, toSql key]
 
 
 absDir :: String -> IO String
