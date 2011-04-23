@@ -10,6 +10,7 @@ data SiteType = StartCodon
               | StopCodon
               | Acceptor
               | Donor
+              | Unknown
                 deriving (Show)
 data Sequence = Sequence {seqname::Name, seqstart:: Integer, seqend::Integer}
                 deriving (Show)

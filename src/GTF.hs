@@ -186,7 +186,7 @@ createStartSite gtflines = se (length y > 0)
                               (se ((y !! 0 !! 6) == "+" )
                                   (Site (y!! 0 !! 0) (read (y !! 0 !! 3)) StartCodon)
                                   (Site (y!! 0 !! 0) (read (y !! 0 !! 4)) StartCodon) )
-                              (Site "Error" (-1000) StartCodon)
+                              (Site "Error" (-1000) Unknown)
                            where  y = ( filter ( \ x -> ( (x !! 2) == "start_codon" )) gtflines )
 
 createStopSite :: [[String]] -> Site
@@ -194,7 +194,7 @@ createStopSite gtflines =  se (length y > 0)
                               (se ((y !! 0 !! 6) == "+" )
                                   (Site (y!! 0 !! 0) (read (y !! 0 !! 3) -1) StopCodon)
                                   (Site (y!! 0 !! 0) (read(y !! 0 !! 4)+1) StopCodon))
-                              (Site "Error" (-1000) StopCodon)
+                              (Site "Error" (-1000) Unknown)
                            where  y = ( filter ( \ x -> ( (x !! 2) == "stop_codon" )) gtflines )
 
 
@@ -203,6 +203,7 @@ createCDSList gtflines site1 site2 = map ( \ x -> createCDS x site1 site2)  ( fi
 
 createCDS :: [String] -> Site -> Site -> CDS
 createCDS gtfline site1 site2
+          | (hasUnknown site1 site2) = CDS (Site name pos1 (stype site1)) (Site name pos2 (stype site2)) phase
           | (position site1 == pos1 && position site2 == pos2) = CDS (Site name pos1 StartCodon) (Site name pos2 StopCodon) phase
           | (position site1 == pos2 && position site2 == pos1) = CDS (Site name pos1 StopCodon) (Site name pos2 StartCodon) phase
           | (position site1 == pos1 && position site2 /= pos2) = CDS (Site name pos1 StartCodon) (Site name pos2 Donor) phase
@@ -216,6 +217,11 @@ createCDS gtfline site1 site2
                 strand = gtfline !! 6
                 name = gtfline !! 0
                 phase = read $ gtfline !! 7
+                hasUnknown s1 s2 = case (stype site1) of
+                                      Unknown -> True
+                                      _ -> case (stype site2) of
+                                              Unknown -> True
+                                              _ -> False
 
 clusterGTFLinesByTranscript :: [[String]] ->[[[String]]]
 clusterGTFLinesByTranscript gtflines = map (\ x -> getTranscript x gtflines ) $ buildTranscriptNameList gtflines
