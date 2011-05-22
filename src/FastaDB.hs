@@ -1,4 +1,4 @@
-module FastaDB (indexFastaFile, getSequence) where
+module FastaDB (indexFastaFile, updateIndex, getSequence) where
 
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C
