@@ -1,4 +1,4 @@
-module FastaDB (indexFastaFile, updateIndex, getSequence) where
+module FastaDB (indexFastaFile, getSequence) where
 
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as C
@@ -27,16 +27,16 @@ trim      = f . f
 
 getSequence :: FilePath -> FilePath -> String -> IO(L.ByteString)
 getSequence db fasta code =
-  do words <- return(splitOn " " (trim $ cleanSpaces  code))
+  do words <- return(splitOn " " (trim $! cleanSpaces  code))
      seqname <- return(head words)
-     positions <- return (getPositions (tail words))
+     positions <- return $! (getPositions (tail words))
      if (length(positions) <= 0)
         then do return (L.empty)
         else do seqByPositions db fasta seqname positions
   where getPositions [] = []
         getPositions [x] = []
         getPositions [x,y] = [((read x)::Int64, (read y ):: Int64)]
-        getPositions (x:y:rest) = [((read x)::Int64, (read y) :: Int64)] ++ getPositions rest
+        getPositions (x:y:rest) = [((read x)::Int64, (read y) :: Int64)] ++ (getPositions rest)
 
 
 cleanSpaces :: String -> String
@@ -95,30 +95,31 @@ getSubSequence' fasta dbfile key b e =
      begin <- getInt db key $ getStartPositionFromDatabase
      small <- getInt db key $ getSmallestOffsetFromDatabase
      largest <- getInt db key $ getLargestOffsetFromDatabase
-
      beginOfSequence <- return(begin + small + 1)
      endOfSequence <- return(begin + largest )
-
-     offsetStart <- sumOffset db key b 0
-     offsetEnd <- sumOffset db key e 0
-     subSeqBegin <- return(offsetStart + b + beginOfSequence - 1)
-     subSeqEnd <- return(offsetEnd + e + beginOfSequence - 1)
-     subSeqBegin <- fixLimitStart subSeqBegin beginOfSequence
-     subSeqBegin <- fixLimitEnd subSeqBegin endOfSequence
-     subSeqEnd <- fixLimitStart subSeqEnd beginOfSequence
-     subSeqEnd <- fixLimitEnd subSeqEnd endOfSequence
-
-     hdl <- openFile absPathFasta ReadMode
-     hSeek hdl AbsoluteSeek (fromIntegral subSeqBegin)
-     fsize <- hFileSize hdl
-     seqdata <- if ((subSeqEnd - subSeqBegin + 1) > 0)
-                   then do fp <- mallocForeignPtrBytes (fromIntegral (subSeqEnd - subSeqBegin + 1))
-                           len <- withForeignPtr fp $ \buf -> hGetBuf hdl buf (fromIntegral (subSeqEnd - subSeqBegin + 1))
-                           lazySlurp fp 0 (fromIntegral len)
-                   else do return(L.empty)
-     hClose hdl
+     out <- if (beginOfSequence <= endOfSequence) 
+               then do offsetStart <- sumOffset db key b 0
+                       offsetEnd <- sumOffset db key e 0
+                       subSeqBegin <- return(offsetStart + b + beginOfSequence - 1)
+                       subSeqEnd <- return(offsetEnd + e + beginOfSequence - 1)
+                       subSeqBegin <- fixLimitStart subSeqBegin beginOfSequence
+                       subSeqBegin <- fixLimitEnd subSeqBegin endOfSequence
+                       subSeqEnd <- fixLimitStart subSeqEnd beginOfSequence
+                       subSeqEnd <- fixLimitEnd subSeqEnd endOfSequence
+                       hdl <- openFile absPathFasta ReadMode
+                       hSeek hdl AbsoluteSeek (fromIntegral subSeqBegin)
+                       fsize <- hFileSize hdl
+                       seqdata <- if ((subSeqEnd - subSeqBegin + 1) > 0)
+                                     then do fp <- mallocForeignPtrBytes (fromIntegral (subSeqEnd - subSeqBegin + 1))
+                                             len <- withForeignPtr fp $ \buf -> hGetBuf hdl buf (fromIntegral (subSeqEnd - subSeqBegin + 1))
+                                             lazySlurp fp 0 (fromIntegral len)
+                                     else do return(L.empty)
+                       hClose hdl
+                       return seqdata
+               else do hPutStrLn stderr $ "ERROR: could not find sequence: " ++ key ++ ":" ++ (show b) ++ "," ++ (show e)
+                       return L.empty 
      disconnect db
-     return seqdata
+     return out
   where fixLimitStart pos1 start  =
          do if (pos1 < start)
                then return (start)
@@ -243,8 +244,12 @@ getKeys db =
 
 getInt :: Connection -> String -> (Connection -> String -> IO ([[SqlValue]]) ) ->IO (Int64)
 getInt db key k =
-  do x <- k db key
-     return ((fromSql (x!!0!!0))::Int64)
+     do x <- k db key
+        if ((length x) > 0) 
+           then case (x!!0!!0) of 
+                     SqlNull -> return (0);
+                     _ -> return ((fromSql (x!!0!!0))::Int64)
+           else return 0
 
 
 getKeysFromDatabase  :: Connection -> IO ([[SqlValue]])
