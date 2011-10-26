@@ -266,6 +266,7 @@ extractCDS s a = extractFeature s a fromGenes (\ x -> genes x)
                                              Acceptor -> forward
                                              Donor -> reverse
                                              StopCodon -> reverse
+                                             Unknown -> ([],[])
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstr])
                                                   seqstr = " "++ show (position (cstart c)) ++ " " ++ show  (position (cend c))
@@ -282,6 +283,7 @@ extractExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              Acceptor -> forward
                                              Donor -> reverse
                                              StopCodon -> reverse
+                                             Unknown -> ([], [])
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstr])
                                                   seqstr = printSequence s  (parentseq (cstart c))
@@ -299,6 +301,7 @@ extractInitialPattern s a = extractFeature s a fromGenes (\ x -> genes x)
                                              Acceptor -> forward
                                              Donor -> reverse
                                              StopCodon -> reverse
+                                             Unknown -> ([], [])
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstrR])
                                                   seqstr = printSequence s  (parentseq (cstart c))
