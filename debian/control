@@ -1,0 +1,85 @@
+Source: segseq
+Priority: extra
+Section: haskell
+Maintainer: Andre Yoshiaki Kashiwabara <ayoshi@gmail.com>
+Build-Depends: debhelper (>= 7.0),
+               haskell-devscripts (>= 0.8),
+               cdbs,
+               ghc,
+               ghc-prof,
+               libghc-hdbc-dev,
+               libghc-hdbc-prof,
+               libghc-hdbc-sqlite3-dev,
+               libghc-hdbc-sqlite3-prof,
+               libghc-deepseq-dev,
+               libghc-deepseq-prof,
+               libghc-parsec-dev,
+               libghc-parsec-prof,
+               libghc-split-dev,
+               libghc-split-prof
+Build-Depends-Indep: ghc-doc,
+                     libghc-hdbc-doc,
+                     libghc-hdbc-sqlite3-doc,
+                     libghc-deepseq-doc,
+                     libghc-parsec-doc,
+                     libghc-split-doc
+Standards-Version: 3.9.1
+Homepage: http://hackage.haskell.org/package/segseq
+
+Package: libghc-segseq-dev
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${haskell:Depends},
+         ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Provides: ${haskell:Provides}
+Description: 
+ Useful tool to segment sequences for gene prediction training
+ .
+  Author: Andre Yoshiaki Kashiwabara
+  Upstream-Maintainer: akashiwabara@usp.br
+ .
+ This package contains the normal library files.
+
+Package: libghc-segseq-prof
+Architecture: any
+Depends: ${haskell:Depends},
+         ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Provides: ${haskell:Provides}
+Description: 
+ Useful tool to segment sequences for gene prediction training
+ .
+  Author: Andre Yoshiaki Kashiwabara
+  Upstream-Maintainer: akashiwabara@usp.br
+ .
+ This package contains the libraries compiled with profiling enabled.
+
+Package: libghc-segseq-doc
+Architecture: all
+Section: doc
+Depends: ${haskell:Depends},
+         ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Description: 
+ Useful tool to segment sequences for gene prediction training
+ .
+  Author: Andre Yoshiaki Kashiwabara
+  Upstream-Maintainer: akashiwabara@usp.br
+ .
+ This package contains the documentation files.
+
+Package: segseq
+Architecture: any
+Section: misc
+Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}
+Description:  An executable built with the segseq-1.0.0 library.
+
+Package: segseq-reindex
+Architecture: any
+Section: misc
+Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}
+Description:  An executable built with the segseq-1.0.0 library.
