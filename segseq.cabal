@@ -1,0 +1,21 @@
+name: segseq
+version: 1.0.0
+description: Useful tool to segment sequences for gene prediction training
+license: GPL
+license-file: LICENSE
+author: Andre Yoshiaki Kashiwabara
+maintainer: akashiwabara@usp.br
+build-Type: Simple
+cabal-version: >= 1.2
+library
+    exposed-modules:     SegSeq.FastaDB  SegSeq.GTF  SegSeq.SegSequence  SegSeq.SequenceAnnotation
+
+executable segseq
+           Main-is:           segseq.hs
+           other-modules:     SegSeq.FastaDB  SegSeq.GTF  SegSeq.SegSequence  SegSeq.SequenceAnnotation
+           Build-Depends:     base >= 3 && < 5,  parsec,  directory, haskell98, deepseq, process, bytestring,  split, unix, filepath, HDBC-sqlite3, HDBC
+
+executable segseq-reindex
+           Main-is:           segseq-reindex.hs
+           other-modules:     SegSeq.FastaDB  SegSeq.GTF  SegSeq.SegSequence  SegSeq.SequenceAnnotation
+           Build-Depends:     base >= 3 && < 5,  parsec,  directory, haskell98, deepseq, process, bytestring,  split, unix, filepath, HDBC-sqlite3, HDBC
