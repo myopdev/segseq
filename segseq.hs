@@ -17,7 +17,6 @@ import Control.Concurrent
 import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Internal
-import Directory
 import Data.List.Split
 import Data.Char
 import Data.List

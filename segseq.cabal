@@ -13,9 +13,9 @@ library
 executable segseq
            Main-is:           segseq.hs
            other-modules:     SegSeq.FastaDB  SegSeq.GTF  SegSeq.SegSequence  SegSeq.SequenceAnnotation
-           Build-Depends:     base >= 3 && < 5,  parsec,  directory, haskell98, deepseq, process, bytestring,  split, unix, filepath, HDBC-sqlite3, HDBC
+           Build-Depends:     base >= 4,  parsec,  directory >= 1.2,  deepseq, process, bytestring,  split, unix, filepath, HDBC-sqlite3, HDBC
 
 executable segseq-reindex
            Main-is:           segseq-reindex.hs
            other-modules:     SegSeq.FastaDB  SegSeq.GTF  SegSeq.SegSequence  SegSeq.SequenceAnnotation
-           Build-Depends:     base >= 3 && < 5,  parsec,  directory, haskell98, deepseq, process, bytestring,  split, unix, filepath, HDBC-sqlite3, HDBC
+           Build-Depends:     base >= 4,  parsec,  directory >= 1.2,  deepseq, process, bytestring,  split, unix, filepath, HDBC-sqlite3, HDBC
