@@ -94,7 +94,7 @@ removeEmptyEntries []  = []
 removeEmptyEntries (x:xs) = se (x == [""]) (removeEmptyEntries xs) ([x] ++ removeEmptyEntries xs)
 
 readAttr :: String ->  [String]
-readAttr input = case parse attrParser "parsing attribute" input of
+readAttr input = case parse (attrParser <|> attrParserR) "parsing attribute" input of
                       Left err -> ["Parse error: " ++ show err]
                       Right val -> val
 
@@ -108,6 +108,13 @@ attrParser :: GenParser Char st [String]
 attrParser  = do geneid <- geneIdParser
                  transcriptid <- txParser
                  return [geneid, transcriptid];
+
+
+attrParserR :: GenParser Char st [String]
+attrParserR  = do transcriptid <- txParser
+                  geneid <- geneIdParser
+                  return [geneid, transcriptid];
+
 
 geneIdParser :: GenParser Char st String
 geneIdParser = do  string "gene_id" >> spaces
