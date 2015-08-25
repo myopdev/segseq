@@ -12,15 +12,21 @@ a specific annotated feature.
 
 1. Download *segseq* from GitHub 
 
-```
-git clone https://github.com/myopdev/segseq.git
-```
+ ```
+ git clone https://github.com/myopdev/segseq.git
+ ```
 
-2. Execute *cabal*
+2. Execute *cabal update*
 
-```
-cabal install segseq
-```
+ ``` 
+ cabal update
+ ```
+
+3. Execute *cabal install*
+
+ ```
+ cabal install ./segseq
+ ```
 
 
 # Examples 
