@@ -7,6 +7,7 @@ a specific annotated feature.
 
 1. [Haskell](https://www.haskell.org/)
 2. [Cabal](https://www.haskell.org/cabal)
+3. [SQLite3](https://www.sqlite.org/)
 
 # Installing SegSeq
 
