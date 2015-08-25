@@ -7,6 +7,7 @@ a specific annotated feature.
 
 1. [Haskell](https://www.haskell.org/)
 2. [Cabal](https://www.haskell.org/cabal)
+3. [SQLite3](https://www.sqlite.org/):  ``libsqlite3-dev``
 
 # Installing SegSeq
 
@@ -27,7 +28,12 @@ a specific annotated feature.
  ```
  cabal install ./segseq
  ```
+4. Add the following line at the end of the ``.profile`` file
 
+ ```
+ export PATH=$PATH:$HOME/.cabal/bin
+ ```
+ 
 
 # Examples 
 
