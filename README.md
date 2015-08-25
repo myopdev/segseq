@@ -52,19 +52,19 @@ segseq -r -x cds -f dataset/genes.fa -g dataset/genes.gtf
 ### Initial Exons
 
 ```
-segseq -r -x initial -g dataset/train.gtf -f dataset/train.fa
+segseq -r -x initial -g dataset/genes.gtf -f dataset/genes.fa
 ```
 
 ### Internal Exons
 
 ```
-segseq -r -x internal -g dataset/train.gtf -f dataset/train.fa
+segseq -r -x internal -g dataset/genes.gtf -f dataset/genes.fa
 ```
 
 ### Final Exons
 
 ```
-segseq -r -x final  -g dataset/train.gtf -f dataset/train.fa
+segseq -r -x final  -g dataset/genes.gtf -f dataset/genes.fa
 ```
 
 
