@@ -28,7 +28,12 @@ a specific annotated feature.
  ```
  cabal install ./segseq
  ```
+4. Add the following line at the end of the ``.profile`` file
 
+ ```
+ export PATH=$PATH:$HOME/.cabal/bin
+ ```
+ 
 
 # Examples 
 
