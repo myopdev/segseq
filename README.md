@@ -7,7 +7,7 @@ a specific annotated feature.
 
 1. [Haskell](https://www.haskell.org/)
 2. [Cabal](https://www.haskell.org/cabal)
-3. [SQLite3](https://www.sqlite.org/)
+3. [SQLite3](https://www.sqlite.org/):  ``libsqlite3-dev``
 
 # Installing SegSeq
 
