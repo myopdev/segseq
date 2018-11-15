@@ -111,9 +111,10 @@ printFeature s (f,r)  =
 putSequence :: String -> L.ByteString -> IO()
 putSequence  seq bytes =
   do if (bytes /= L.empty)
-        then do putStrLn $ ">" ++ head (splitOn " " seq)
+        then do putStrLn $ ">" ++ head (splited) ++ "|" ++ last(splited)  
                 L.putStrLn bytes
         else do return()
+   where splited = splitOn " " seq
 
 
 

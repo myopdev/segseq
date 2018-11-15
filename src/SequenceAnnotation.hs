@@ -1,7 +1,7 @@
 module SequenceAnnotation where
 
 import Data.List
-import Maybe
+import Data.Maybe
 
 type Name = String
 type Strand = String

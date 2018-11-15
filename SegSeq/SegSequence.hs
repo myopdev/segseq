@@ -153,9 +153,9 @@ extractIntrons s a = extractFeature s a fromGenes (\ annot -> genes annot)
                     where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
                           fromTranscripts s p t = extractFeature s t fromIntrons ( \ txs -> (getIntrons txs) )
                           fromIntrons s p introns = case (strand p == "+") of
-                                                       True ->  (seqstr, [])
+                                                       True ->  (seqstr  , [])
                                                        False -> ([],seqstr)
-                                                    where seqstr = map ( \ i -> printSequence s seqname (fst i) (snd i) ) introns
+                                                    where seqstr = map ( \ i -> (printSequence s seqname (fst i) (snd i)) ++ " " ++ (txname p)) introns
                                                           seqname = parentseq (cstart ((txcds p) !! 0))
 
 
@@ -164,7 +164,7 @@ extractIntrons s a = extractFeature s a fromGenes (\ annot -> genes annot)
 extractSingleExons :: Settings -> [Annotation] -> ([String], [String])
 extractSingleExons s a = extractFeature s a fromGenes (\ x -> genes x)
                  where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
-                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
+                       fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x ) 
                        fromCDSList s p c = extractFeature s c fromCDS ( \x -> [x] )
                        fromCDS s p (c:_)= case (stype (cstart c)) of
                                              StartCodon -> case (stype (cend c)) of
@@ -176,9 +176,9 @@ extractSingleExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              _ -> ([],[])
                                              where forward = ([seqstr],[])
                                                    reverse = ([], [seqstr])
-                                                   seqstr = printSequence s (parentseq (cstart c))
+                                                   seqstr = (printSequence s (parentseq (cstart c))
                                                                           (position (cstart c))
-                                                                          (position (cend c))
+                                                                          (position (cend c))  ++ " " ++ (parentTxname (cstart c)))
 
 
 
@@ -200,9 +200,9 @@ extractFinalExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              _ -> ([],[])
                                              where forward = ([seqstr],[])
                                                    reverse = ([], [seqstr])
-                                                   seqstr = printSequence s (parentseq (cstart c))
+                                                   seqstr = (printSequence s (parentseq (cstart c))
                                                                           (position (cstart c))
-                                                                          (position (cend c))
+                                                                          (position (cend c))  ++ " " ++ (parentTxname (cstart c)))
 
 
 
@@ -221,9 +221,9 @@ extractInternalExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              _ -> ([],[])
                                              where forward = ([seqstr],[])
                                                    reverse = ([], [seqstr])
-                                                   seqstr = printSequence s (parentseq (cstart c))
+                                                   seqstr = (printSequence s (parentseq (cstart c))
                                                                           (position (cstart c))
-                                                                          (position (cend c))
+                                                                          (position (cend c)) ++ " " ++ (parentTxname (cstart c)))
 
 
 
@@ -244,9 +244,11 @@ extractInitialExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              _ -> ([],[])
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstr])
-                                                  seqstr = printSequence  s (parentseq (cstart c))
+                                                  seqstr = (printSequence  s (parentseq (cstart c))
                                                                          (position (cstart c))
-                                                                         (position (cend c))
+                                                                         (position (cend c)) ++ " " ++ (parentTxname (cstart c)))
+
+
 
 
 extractCDS :: Settings -> [Annotation] -> ([String], [String])
@@ -286,9 +288,11 @@ extractExons s a = extractFeature s a fromGenes (\ x -> genes x)
                                              Unknown -> ([], [])
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstr])
-                                                  seqstr = printSequence s  (parentseq (cstart c))
+                                                  seqstr = (printSequence s  (parentseq (cstart c))
                                                                          (position (cstart c))
-                                                                         (position (cend c))
+                                                                         (position (cend c)) ++ " " ++ (parentTxname (cstart c)))
+
+
 
 
 extractInitialPattern :: Settings -> [Annotation] -> ([String], [String])
@@ -304,12 +308,16 @@ extractInitialPattern s a = extractFeature s a fromGenes (\ x -> genes x)
                                              Unknown -> ([], [])
                                             where forward = ([seqstr],[])
                                                   reverse = ([], [seqstrR])
-                                                  seqstr = printSequence s  (parentseq (cstart c))
+                                                  seqstr = (printSequence s  (parentseq (cstart c))
                                                                             (position (cstart c) + (offset s))
-                                                                            (position (cstart c) + (offset s) + (length' s) - 1)
-                                                  seqstrR = printSequence s (parentseq (cend c))
+                                                                            (position (cstart c) + (offset s) + (length' s) - 1) ++ " " ++ (parentTxname (cstart c)))
+
+
+                                                  seqstrR = (printSequence s (parentseq (cend c))
                                                                             (position (cend c)  - (offset s))
-                                                                            (position (cend c) - (offset s) - (length' s) + 1)
+                                                                            (position (cend c) - (offset s) - (length' s) + 1)++ " " ++ (parentTxname (cstart c)))
+
+
 
 extractSites :: Settings -> [Annotation] -> ([String], [String])
 extractSites s a = extractFeature s a fromGenes (\ annot -> genes annot)
@@ -328,35 +336,35 @@ singleSiteToStr :: Settings -> Transcript -> Site -> ([String], [String])
 singleSiteToStr s t site =
          case stype site of
             StartCodon ->case (strand t == "+") of
-                               True -> ([printSequence  s (parentseq site)
+                               True -> ([(printSequence  s (parentseq site)
                                                         ((position site) - (offset s))
-                                                        ((position site) - (offset s) + (length' s) - 1)],[])
+                                                        ((position site) - (offset s) + (length' s) - 1)) ++ " " ++ (parentTxname site)],[])
                                False -> ([],[printSequence s (parentseq site)
                                                            ((position site) + (offset s) - (length' s) + 1)
-                                                           ((position site) + (offset s))])
+                                                           ((position site) + (offset s)) ++ " " ++ (parentTxname  site)])
             Donor -> case (strand t == "+") of
                        True -> ([printSequence s (parentseq site)
                                              ((position site) - (offset s) + 1)
-                                             ((position site) - (offset s) + (length' s) )] ,[])
+                                             ((position site) - (offset s) + (length' s) )++ " " ++ (parentTxname  site)] ,[])
                        False -> ([], [printSequence s (parentseq site)
                                                     ((position site) + (offset s) - (length' s) )
-                                              ((position site) + (offset s) - 1)])
+                                              ((position site) + (offset s) - 1)++ " " ++ (parentTxname  site)])
 
             Acceptor ->  case (strand t == "+") of
                                True -> ([printSequence s (parentseq site)
                                                        ((position site) - (offset s) - 2)
-                                                       ((position site) - (offset s) + (length' s) - 3)],[])
+                                                       ((position site) - (offset s) + (length' s) - 3)++ " " ++ (parentTxname  site)],[])
                                False -> ([], [printSequence s  (parentseq site)
                                                             ((position site) + (offset s) - (length' s) + 3)
-                                                             ((position site) + (offset s) + 2) ])
+                                                             ((position site) + (offset s) + 2) ++ " " ++ (parentTxname  site)])
 
             StopCodon -> case (strand t == "+") of
                                True -> ([printSequence s (parentseq site)
                                                        ((position site) - (offset s) + 1)
-                                                       ((position site) - (offset s) + (length' s) )], [])
+                                                       ((position site) - (offset s) + (length' s) )++ " " ++ (parentTxname  site)], [])
                                False -> ([], [printSequence s (parentseq site)
                                                             ((position site) + (offset s) - (length' s) )
-                                                            ((position site) + (offset s) - 1)])
+                                                            ((position site) + (offset s) - 1)++ " " ++ (parentTxname  site)])
 
 siteName :: Settings -> SiteType
 siteName s | feature s == "start" = StartCodon

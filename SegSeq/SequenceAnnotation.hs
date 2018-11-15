@@ -6,6 +6,7 @@ import Data.Maybe
 type Name = String
 type Strand = String
 
+
 data SiteType = StartCodon
               | StopCodon
               | Acceptor
@@ -14,7 +15,7 @@ data SiteType = StartCodon
                 deriving (Show)
 data Sequence = Sequence {seqname::Name, seqstart:: Integer, seqend::Integer}
                 deriving (Show)
-data Site = Site {parentseq::Name, position:: Integer, stype:: SiteType}
+data Site = Site {parentseq::Name, parentTxname::Name, position:: Integer, stype:: SiteType}
             deriving (Show)
 data CDS = CDS {cstart::Site, cend::Site, phase::Integer}
            deriving (Show)

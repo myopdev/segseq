@@ -16,7 +16,7 @@ import Control.Concurrent
 import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Internal
-import Directory
+import System.Directory
 import FastaDB
 import Data.List.Split
 import Data.Char
@@ -25,8 +25,8 @@ import Data.List
 main :: IO()
 main =  do
            s <-  (getArgs >>= (return . compilerOpts) >>= (liftM (buildSettings (Settings "" "" "" 9 3 (-1) (-1) (-1) (-1) (False) (False) (False)))))
---           hPutStrLn stderr $ "r: " ++ (show $ clean s)
---           hPutStrLn stderr $ "x: " ++ (feature s)
+           hPutStrLn stderr $ "r: " ++ (show $ clean s)
+           hPutStrLn stderr $ "x: " ++ (feature s)
            gtfh <- openFile (gtf s) ReadMode
            indexFastaFile (fasta s) ((fasta s) ++ ".db")
            (B.hGetContents gtfh) >>= (return . createAnnotationList . readCSV . B.unpack) >>= (filterGeneByGC s) >>= (run s)

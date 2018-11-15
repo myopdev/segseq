@@ -191,18 +191,20 @@ calculateCDSPhase lcds strand = se (strand == "+")
 createStartSite :: [[String]] -> Site
 createStartSite gtflines = se (length y > 0)
                               (se ((y !! 0 !! 6) == "+" )
-                                  (Site (y!! 0 !! 0) (read (y !! 0 !! 3)) StartCodon)
-                                  (Site (y!! 0 !! 0) (read (y !! 0 !! 4)) StartCodon) )
-                              (Site "Error" (-1000) Unknown)
+                                  (Site (y!! 0 !! 0) txname  (read (y !! 0 !! 3)) StartCodon)
+                                  (Site (y!! 0 !! 0)  txname (read (y !! 0 !! 4)) StartCodon) )
+                              (Site "Error" txname (-1000) Unknown)
                            where  y = ( filter ( \ x -> ( (x !! 2) == "start_codon" )) gtflines )
+                                  txname = getTranscriptNameFromGTFLine (gtflines!!0)
 
 createStopSite :: [[String]] -> Site
 createStopSite gtflines =  se (length y > 0)
                               (se ((y !! 0 !! 6) == "+" )
-                                  (Site (y!! 0 !! 0) (read (y !! 0 !! 3) -1) StopCodon)
-                                  (Site (y!! 0 !! 0) (read(y !! 0 !! 4)+1) StopCodon))
-                              (Site "Error" (-1000) Unknown)
+                                  (Site (y!! 0 !! 0) txname (read (y !! 0 !! 3) -1) StopCodon)
+                                  (Site (y!! 0 !! 0) txname (read(y !! 0 !! 4)+1) StopCodon))
+                              (Site "Error" txname (-1000) Unknown)
                            where  y = ( filter ( \ x -> ( (x !! 2) == "stop_codon" )) gtflines )
+                                  txname = getTranscriptNameFromGTFLine (gtflines!!0)
 
 
 createCDSList :: [[String]] -> Site-> Site -> [CDS]
@@ -210,20 +212,21 @@ createCDSList gtflines site1 site2 = map ( \ x -> createCDS x site1 site2)  ( fi
 
 createCDS :: [String] -> Site -> Site -> CDS
 createCDS gtfline site1 site2
-          | (hasUnknown site1 site2) = CDS (Site name pos1 (stype site1)) (Site name pos2 (stype site2)) phase
-          | (position site1 == pos1 && position site2 == pos2) = CDS (Site name pos1 StartCodon) (Site name pos2 StopCodon) phase
-          | (position site1 == pos2 && position site2 == pos1) = CDS (Site name pos1 StopCodon) (Site name pos2 StartCodon) phase
-          | (position site1 == pos1 && position site2 /= pos2) = CDS (Site name pos1 StartCodon) (Site name pos2 Donor) phase
-          | (position site1 == pos2 && position site2 /= pos1) = CDS (Site name pos1 Donor) (Site name pos2 StartCodon) phase
-          | (position site1 /= pos1 && position site2 == pos2) = CDS (Site name pos1 Acceptor) (Site name pos2 StopCodon) phase
-          | (position site1 /= pos2 && position site2 == pos1) = CDS (Site name pos1 StopCodon) (Site name pos2 Acceptor) phase
-          | otherwise = se (strand == "+") (CDS (Site name pos1 Acceptor) (Site name pos2 Donor) phase)
-                                           (CDS (Site name pos1 Donor) (Site name pos2 Acceptor) phase)
+          | (hasUnknown site1 site2) = CDS (Site name txname pos1 (stype site1)) (Site name txname pos2 (stype site2)) phase
+          | (position site1 == pos1 && position site2 == pos2) = CDS (Site name txname pos1 StartCodon) (Site name txname pos2 StopCodon) phase
+          | (position site1 == pos2 && position site2 == pos1) = CDS (Site name txname pos1 StopCodon) (Site name txname pos2 StartCodon) phase
+          | (position site1 == pos1 && position site2 /= pos2) = CDS (Site name txname pos1 StartCodon) (Site name txname pos2 Donor) phase
+          | (position site1 == pos2 && position site2 /= pos1) = CDS (Site name txname pos1 Donor) (Site name txname pos2 StartCodon) phase
+          | (position site1 /= pos1 && position site2 == pos2) = CDS (Site name txname pos1 Acceptor) (Site name txname pos2 StopCodon) phase
+          | (position site1 /= pos2 && position site2 == pos1) = CDS (Site name txname pos1 StopCodon) (Site name txname pos2 Acceptor) phase
+          | otherwise = se (strand == "+") (CDS (Site name txname pos1 Acceptor) (Site name txname pos2 Donor) phase)
+                                           (CDS (Site name txname pos1 Donor) (Site name txname pos2 Acceptor) phase)
           where pos1 = read $ gtfline !! 3
                 pos2 = read $ gtfline !! 4
                 strand = gtfline !! 6
                 name = gtfline !! 0
                 phase = read $ gtfline !! 7
+                txname = getTranscriptNameFromGTFLine gtfline
                 hasUnknown s1 s2 = case (stype site1) of
                                       Unknown -> True
                                       _ -> case (stype site2) of
