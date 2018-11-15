@@ -256,10 +256,10 @@ extractCDS s a = extractFeature s a fromGenes (\ x -> genes x)
                    where fromGenes s p g = extractFeature s g fromTranscripts (filterTranscript s)
                          fromTranscripts s p t = extractFeature s t fromCDSList ( \x -> txcds x )
                          fromCDSList s p c = ([case (length (fwd')>= 1 && (head fwd') /= "") of
-                                                    True -> (parentseq (cstart (c!!0))) ++ " " ++ (head fwd')++"\n"
+                                                    True -> (parentseq (cstart (c!!0))) ++ " " ++ (head fwd')++ " " ++ (txname p)
                                                     False -> ""],
                                               [case (length (rev') >= 1 && (head rev') /= "") of
-                                                    True -> (parentseq (cstart (c!!0))) ++ " " ++ (head rev') ++ "\n"
+                                                    True -> (parentseq (cstart (c!!0))) ++ " " ++ (head rev') ++ " " ++ (txname p) 
                                                     False -> ""])
                                             where (fwd',rev') = extractFeatureJoin s c fromCDS ( \x -> [x] )
 
